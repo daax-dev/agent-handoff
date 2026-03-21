@@ -1,0 +1,28 @@
+# Source and config
+src/
+tsconfig.json
+
+# Tests
+tests/
+
+# Lock files
+bun.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Development
+.logs/
+*.tgz
+coverage/
+
+# Development directories
+.github/
+.claude/
+.serena/
+
+# Config and metadata
+CLAUDE.md
+
+# Git
+.git/
+.gitignore
