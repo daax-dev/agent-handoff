@@ -95,3 +95,10 @@ export function listWorkers(): Worker[] {
   }
   return Array.from(workers.values());
 }
+
+/**
+ * Test-only helper to reset in-memory worker registry between test cases.
+ */
+export function clearWorkers(): void {
+  workers.clear();
+}

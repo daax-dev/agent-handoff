@@ -29,3 +29,10 @@ export function removeFromQueue(jobId: string): boolean {
   queue.splice(idx, 1);
   return true;
 }
+
+/**
+ * Test-only helper to reset in-memory queue between test cases.
+ */
+export function clearQueue(): void {
+  queue.length = 0;
+}

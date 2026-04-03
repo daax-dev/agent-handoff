@@ -36,7 +36,8 @@
     "dev:ui": "bun --cwd ui run dev",
     "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "vitest run",
+    "test:bun": "bun test",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
@@ -48,6 +49,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.5.2",
+    "vitest": "^3.2.4",
     "typescript": "^5.9.3"
   },
   "engines": {

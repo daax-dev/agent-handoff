@@ -1,17 +1,34 @@
-import { $ } from "bun";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { join } from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { existsSync, readFileSync, unlinkSync } from "fs";
 import type { AgentName, SpawnResult, SpawnOptions } from "../types.js";
 import type { BaseAdapter } from "./base-adapter.js";
 
-export async function isTmuxAvailable(): Promise<boolean> {
+const execFileAsync = promisify(execFile);
+
+async function tmux(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
-    const result = await $`tmux list-sessions`.quiet().nothrow();
-    return result.exitCode === 0;
-  } catch {
-    return false;
+    const { stdout, stderr } = await execFileAsync("tmux", args, {
+      cwd: cwd ?? process.cwd(),
+      encoding: "utf-8",
+    });
+    return { stdout, stderr, exitCode: 0 };
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number | string };
+    return {
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+      exitCode: typeof err.code === "number" ? err.code : 1,
+    };
   }
+}
+
+export async function isTmuxAvailable(): Promise<boolean> {
+  const result = await tmux(["list-sessions"]);
+  return result.exitCode === 0;
 }
 
 export async function spawnInTmux(
@@ -28,8 +45,8 @@ export async function spawnInTmux(
   const exitCodeFile = join(tmpdir(), `daax-exit-${randomUUID()}.tmp`);
 
   // Create new tmux window and get pane ID
-  const paneResult = await $`tmux new-window -n ${windowName} -P -F "#{pane_id}" -d`.cwd(cwd).text();
-  const paneId = paneResult.trim();
+  const paneResult = await tmux(["new-window", "-n", windowName, "-P", "-F", "#{pane_id}", "-d"], cwd);
+  const paneId = paneResult.stdout.trim();
 
   if (!paneId) {
     throw new Error("Failed to create tmux window");
@@ -38,9 +55,9 @@ export async function spawnInTmux(
   // Send the command to the pane, capturing exit code when done
   // For codex which needs stdin, pipe the prompt
   if (adapter.name === "codex") {
-    await $`tmux send-keys -t ${paneId} ${`echo ${shellEscape(prompt)} | ${fullCommand}; echo $? > ${shellEscape(exitCodeFile)}`} Enter`.quiet();
+    await tmux(["send-keys", "-t", paneId, `echo ${shellEscape(prompt)} | ${fullCommand}; echo $? > ${shellEscape(exitCodeFile)}`, "Enter"], cwd);
   } else {
-    await $`tmux send-keys -t ${paneId} ${`${fullCommand}; echo $? > ${shellEscape(exitCodeFile)}`} Enter`.quiet();
+    await tmux(["send-keys", "-t", paneId, `${fullCommand}; echo $? > ${shellEscape(exitCodeFile)}`, "Enter"], cwd);
   }
 
   // Poll until the exit code file appears (command finished)
@@ -50,27 +67,25 @@ export async function spawnInTmux(
   while (true) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const { existsSync } = await import("fs");
     if (existsSync(exitCodeFile)) {
       break;
     }
 
     if (Date.now() - startTime > timeoutMs) {
       // Kill the pane on timeout
-      await $`tmux kill-pane -t ${paneId}`.quiet().nothrow();
+      await tmux(["kill-pane", "-t", paneId], cwd);
       throw new Error("timed_out");
     }
   }
 
-  // Read exit code using Bun.file for safe file access
-  const exitCodeStr = (await Bun.file(exitCodeFile).text()).trim();
+  const exitCodeStr = readFileSync(exitCodeFile, "utf-8").trim();
   const exitCode = parseInt(exitCodeStr, 10) || 1;
 
   // Capture pane output
-  const stdout = await $`tmux capture-pane -t ${paneId} -p -S -`.text();
+  const captureResult = await tmux(["capture-pane", "-t", paneId, "-p", "-S", "-"], cwd);
+  const stdout = captureResult.stdout;
 
   // Clean up exit code file
-  const { unlinkSync } = await import("fs");
   try { unlinkSync(exitCodeFile); } catch {}
 
   return {

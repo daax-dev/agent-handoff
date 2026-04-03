@@ -1,14 +1,21 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeEach } from "./test-compat.js";
 import { registerWorker, getWorker, heartbeat, assignJob, completeJob, listWorkers, deregisterWorker } from "../src/pool/worker-registry.js";
-import { enqueue, dequeue, dequeueByPredicate, peek, size, removeFromQueue } from "../src/pool/job-queue.js";
+import { enqueue, dequeue, dequeueByPredicate, peek, size, removeFromQueue, clearQueue } from "../src/pool/job-queue.js";
 import { handleHandoffTask } from "../src/tools/handoff-task.js";
 import { handleRegisterWorker } from "../src/tools/register-worker.js";
 import { handlePullTask } from "../src/tools/pull-task.js";
 import { handleSubmitResult } from "../src/tools/submit-result.js";
 import { handleListWorkers } from "../src/tools/list-workers.js";
-import { createJob, getJob } from "../src/job-store.js";
+import { createJob, getJob, clearJobs } from "../src/job-store.js";
+import { clearWorkers } from "../src/pool/worker-registry.js";
 
 describe("Worker Registry", () => {
+  beforeEach(() => {
+    clearWorkers();
+    clearQueue();
+    clearJobs();
+  });
+
   test("registerWorker creates worker with wkr_ prefix", () => {
     const worker = registerWorker("test-worker", ["coding"]);
     expect(worker.id).toMatch(/^wkr_/);
@@ -65,6 +72,12 @@ describe("Worker Registry", () => {
 });
 
 describe("Job Queue", () => {
+  beforeEach(() => {
+    clearWorkers();
+    clearQueue();
+    clearJobs();
+  });
+
   test("enqueue and dequeue FIFO", () => {
     enqueue("job-a");
     enqueue("job-b");
@@ -119,6 +132,12 @@ describe("Job Queue", () => {
 });
 
 describe("Pool Tool Handlers", () => {
+  beforeEach(() => {
+    clearWorkers();
+    clearQueue();
+    clearJobs();
+  });
+
   test("register_worker returns worker ID", async () => {
     const result = await handleRegisterWorker({ name: "tool-test-worker", capabilities: ["ts"] });
     const data = JSON.parse(result.content[0].text);

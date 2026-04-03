@@ -60,3 +60,10 @@ export function listJobs(): Job[] {
 export function deleteJob(jobId: string): boolean {
   return jobs.delete(jobId);
 }
+
+/**
+ * Test-only helper to reset in-memory state between test cases.
+ */
+export function clearJobs(): void {
+  jobs.clear();
+}
