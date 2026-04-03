@@ -1,11 +1,21 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeEach } from "./test-compat.js";
 import { handleCheckStatus } from "../src/tools/check-status.js";
 import { handleGetResult } from "../src/tools/get-result.js";
 import { handleListAgents } from "../src/tools/list-agents.js";
 import { handleCancelTask } from "../src/tools/cancel-task.js";
-import { createJob, updateJob } from "../src/job-store.js";
+import { createJob, updateJob, clearJobs } from "../src/job-store.js";
+import { clearQueue } from "../src/pool/job-queue.js";
+import { clearWorkers } from "../src/pool/worker-registry.js";
+import { clearRegisteredAgents } from "../src/a2a/agent-card.js";
 
 describe("Tool Handlers", () => {
+  beforeEach(() => {
+    clearJobs();
+    clearQueue();
+    clearWorkers();
+    clearRegisteredAgents();
+  });
+
   describe("check_status", () => {
     test("returns status for existing job", async () => {
       const job = createJob({ transport: "cli", agent: "claude", prompt: "test" });
@@ -17,7 +27,7 @@ describe("Tool Handlers", () => {
     });
 
     test("throws for missing job", async () => {
-      expect(handleCheckStatus({ jobId: "hnd_missing12345" })).rejects.toThrow("Job not found");
+      await expect(handleCheckStatus({ jobId: "hnd_missing12345" })).rejects.toThrow("Job not found");
     });
   });
 
@@ -62,7 +72,7 @@ describe("Tool Handlers", () => {
     });
 
     test("throws for missing job", async () => {
-      expect(handleGetResult({ jobId: "hnd_nope12345ab" })).rejects.toThrow("Job not found");
+      await expect(handleGetResult({ jobId: "hnd_nope12345ab" })).rejects.toThrow("Job not found");
     });
   });
 
@@ -84,7 +94,7 @@ describe("Tool Handlers", () => {
 
   describe("cancel_task", () => {
     test("throws for missing job", async () => {
-      expect(handleCancelTask({ jobId: "hnd_gone12345ab" })).rejects.toThrow("Job not found");
+      await expect(handleCancelTask({ jobId: "hnd_gone12345ab" })).rejects.toThrow("Job not found");
     });
 
     test("cannot cancel completed job", async () => {

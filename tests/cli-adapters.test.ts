@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "./test-compat.js";
 import { ClaudeAdapter } from "../src/cli/claude.js";
 import { CodexAdapter } from "../src/cli/codex.js";
 import { GeminiAdapter } from "../src/cli/gemini.js";

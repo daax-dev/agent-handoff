@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "./test-compat.js";
 import { isTmuxAvailable } from "../src/cli/tmux-spawner.js";
 
 describe("tmux-spawner", () => {

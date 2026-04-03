@@ -6,6 +6,7 @@ import { GeminiAdapter } from "./gemini.js";
 import { CopilotAdapter } from "./copilot.js";
 import { OpenCodeAdapter } from "./opencode.js";
 import { AiderAdapter } from "./aider.js";
+import { spawnSync } from "child_process";
 
 const adapters: Record<AgentName, BaseAdapter> = {
   claude: new ClaudeAdapter(),
@@ -26,13 +27,16 @@ export function getAdapter(name: AgentName): BaseAdapter {
 
 export function isAgentAvailable(name: AgentName): boolean {
   const adapter = adapters[name];
-  return Bun.which(adapter.command) !== null;
+  const result = spawnSync("bash", ["-lc", `command -v "${adapter.command}"`], {
+    stdio: "ignore",
+  });
+  return result.status === 0;
 }
 
 export function listCliAgents(): CliAgentInfo[] {
   return Object.values(adapters).map((adapter) => ({
     name: adapter.name,
-    available: Bun.which(adapter.command) !== null,
+    available: isAgentAvailable(adapter.name),
     command: adapter.command,
   }));
 }

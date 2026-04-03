@@ -65,3 +65,10 @@ export function getRegisteredAgent(url: string): AgentCard | undefined {
 export function clearCardCache(): void {
   cardCache.clear();
 }
+
+/**
+ * Test-only helper to reset registered A2A agents between test cases.
+ */
+export function clearRegisteredAgents(): void {
+  registeredAgents.clear();
+}
