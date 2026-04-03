@@ -14,6 +14,7 @@ export interface Job {
   workingDirectory?: string;
   model?: string;
   spawnMode?: "headless" | "tmux";
+  requiredCapabilities?: string[];
   timeoutMs: number;
   createdAt: string;
   startedAt?: string;
@@ -50,6 +51,7 @@ export interface HandoffTaskInput {
   spawnMode?: "headless" | "tmux";
   timeoutMs?: number;
   pool?: boolean;
+  requiredCapabilities?: string[];
 }
 
 export interface CheckStatusInput {

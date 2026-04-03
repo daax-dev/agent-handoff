@@ -1,6 +1,7 @@
-import { dequeue } from "../pool/job-queue.js";
+import { dequeueByPredicate } from "../pool/job-queue.js";
 import { getWorker, assignJob } from "../pool/worker-registry.js";
 import { getJob, updateJob } from "../job-store.js";
+import { workerMatchesRequiredCapabilities } from "../pool/capabilities.js";
 import { logHandoffEvent } from "../utils/logger.js";
 import type { PullTaskInput } from "../types.js";
 
@@ -13,12 +14,18 @@ export async function handlePullTask(args: PullTaskInput) {
     throw new Error(`Worker ${args.workerId} is not idle (status: ${worker.status})`);
   }
 
-  const jobId = dequeue();
+  const jobId = dequeueByPredicate((queuedJobId) => {
+    const queuedJob = getJob(queuedJobId);
+    if (!queuedJob || queuedJob.status !== "queued") {
+      return false;
+    }
+    return workerMatchesRequiredCapabilities(worker.capabilities, queuedJob.requiredCapabilities);
+  });
   if (!jobId) {
     return {
       content: [{
         type: "text" as const,
-        text: JSON.stringify({ available: false, message: "No tasks in queue" }, null, 2),
+        text: JSON.stringify({ available: false, message: "No compatible tasks in queue" }, null, 2),
       }],
     };
   }
@@ -56,6 +63,7 @@ export async function handlePullTask(args: PullTaskInput) {
         prompt: job.prompt,
         workingDirectory: job.workingDirectory,
         model: job.model,
+        requiredCapabilities: job.requiredCapabilities ?? [],
         timeoutMs: job.timeoutMs,
       }, null, 2),
     }],

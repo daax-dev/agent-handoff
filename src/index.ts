@@ -31,6 +31,7 @@ server.tool(
     timeoutMs: z.number().optional().describe("Timeout in milliseconds (default: 300000)"),
     spawnMode: z.enum(["headless", "tmux"]).optional().describe("Spawn mode: 'headless' (default) runs as background process, 'tmux' runs in visible tmux pane"),
     pool: z.boolean().optional().describe("If true, queue the task for worker pool pickup instead of direct spawn"),
+    requiredCapabilities: z.array(z.string()).optional().describe("Required capabilities for pool jobs; only allowed when pool is true"),
   },
   async (args) => handleHandoffTask(args)
 );

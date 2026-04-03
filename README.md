@@ -170,7 +170,8 @@ The coordinator hands off with `pool: true`:
 handoff_task({
   agent: "claude",
   prompt: "Optimize the database queries in user-service",
-  pool: true
+  pool: true,
+  requiredCapabilities: ["database"]
 })
 ```
 
@@ -196,9 +197,15 @@ pull_task({ workerId: "wkr_m3n4o5p6q7r8" })
   "available": true,
   "jobId": "hnd_s1t2u3v4w5x6",
   "prompt": "Optimize the database queries in user-service",
+  "requiredCapabilities": ["database"],
   "timeoutMs": 300000
 }
 ```
+
+Matching semantics:
+- Jobs with no `requiredCapabilities` are pullable by any idle worker.
+- Jobs with `requiredCapabilities` are only pullable by workers that include all required capability tokens.
+- Matching is capability-aware while preserving FIFO among each worker's matchable jobs.
 
 **Step 4: Worker submits result**
 
@@ -235,10 +242,13 @@ Hand off a task to another AI coding agent via CLI spawn, A2A protocol, or worke
 | `timeoutMs` | `number` | No | Timeout in milliseconds (default: 300000) |
 | `spawnMode` | `"headless" \| "tmux"` | No | Spawn mode for CLI agents (default: "headless") |
 | `pool` | `boolean` | No | If true, queue for worker pool instead of direct spawn |
+| `requiredCapabilities` | `string[]` | No | Required worker capabilities for pool jobs only |
 
 **Validation rules:**
 - Exactly one of `agent` or `agentUrl` must be provided
 - If `agent` is specified, the CLI tool must be available on PATH
+- `requiredCapabilities` is only valid when `pool` is `true`
+- Capability tokens are normalized by trimming whitespace and lowercasing
 
 ### check_status
 
@@ -399,6 +409,7 @@ Pull the next available task from the pool queue. Worker must be registered and 
   "prompt": "Optimize database queries",
   "workingDirectory": "/path/to/project",
   "model": "opus",
+  "requiredCapabilities": ["database"],
   "timeoutMs": 300000
 }
 ```
@@ -407,7 +418,7 @@ Pull the next available task from the pool queue. Worker must be registered and 
 ```json
 {
   "available": false,
-  "message": "No tasks in queue"
+  "message": "No compatible tasks in queue"
 }
 ```
 
