@@ -8,6 +8,13 @@ export function dequeue(): string | undefined {
   return queue.shift();
 }
 
+export function dequeueByPredicate(predicate: (jobId: string) => boolean): string | undefined {
+  const idx = queue.findIndex(predicate);
+  if (idx === -1) return undefined;
+  const [jobId] = queue.splice(idx, 1);
+  return jobId;
+}
+
 export function peek(): string | undefined {
   return queue[0];
 }

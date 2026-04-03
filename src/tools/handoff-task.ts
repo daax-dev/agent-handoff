@@ -3,6 +3,7 @@ import { runCliJob, runA2AJob } from "../job-runner.js";
 import { isAgentAvailable } from "../cli/registry.js";
 import { getRegisteredAgent } from "../a2a/agent-card.js";
 import { enqueue } from "../pool/job-queue.js";
+import { normalizeCapabilities } from "../pool/capabilities.js";
 import { logHandoffEvent } from "../utils/logger.js";
 import type { HandoffTaskInput } from "../types.js";
 
@@ -16,6 +17,11 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
 
   if (args.agent && !isAgentAvailable(args.agent)) {
     throw new Error(`Agent '${args.agent}' is not available on PATH. Run list_agents to see available agents.`);
+  }
+
+  const requiredCapabilities = normalizeCapabilities(args.requiredCapabilities);
+  if (!args.pool && requiredCapabilities.length > 0) {
+    throw new Error("'requiredCapabilities' can only be provided when 'pool' is true");
   }
 
   const transport = args.pool ? "pool" : args.agent ? "cli" : "a2a";
@@ -37,6 +43,7 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
     workingDirectory: args.workingDirectory,
     model: args.model,
     spawnMode: args.spawnMode,
+    requiredCapabilities: requiredCapabilities.length > 0 ? requiredCapabilities : undefined,
     timeoutMs: args.timeoutMs,
     authHeaders,
   });
