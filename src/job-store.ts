@@ -21,6 +21,8 @@ export function createJob(params: {
   spawnMode?: "headless" | "tmux";
   timeoutMs?: number;
   authHeaders?: Record<string, string>;
+  /** Serialized HandoffContext (base64) for multi-session task continuation (#18) */
+  contextPayload?: string;
 }): Job {
   const job: Job = {
     id: generateId(),
@@ -35,6 +37,7 @@ export function createJob(params: {
     timeoutMs: params.timeoutMs ?? 300_000,
     createdAt: new Date().toISOString(),
     authHeaders: params.authHeaders,
+    contextPayload: params.contextPayload,
   };
   jobs.set(job.id, job);
   return job;

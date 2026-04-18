@@ -1,10 +1,15 @@
-import { createJob } from "../job-store.js";
+import { createJob, updateJob } from "../job-store.js";
 import { runCliJob, runA2AJob } from "../job-runner.js";
 import { isAgentAvailable } from "../cli/registry.js";
 import { getRegisteredAgent } from "../a2a/agent-card.js";
 import { enqueue } from "../pool/job-queue.js";
 import { logHandoffEvent } from "../utils/logger.js";
 import type { HandoffTaskInput } from "../types.js";
+import { deserializeContext } from "../handoff-context.js";
+import {
+  createProposal,
+  executeHandshake,
+} from "../a2a/handshake.js";
 
 export async function handleHandoffTask(args: HandoffTaskInput) {
   if (!args.agent && !args.agentUrl) {
@@ -16,6 +21,17 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
 
   if (args.agent && !isAgentAvailable(args.agent)) {
     throw new Error(`Agent '${args.agent}' is not available on PATH. Run list_agents to see available agents.`);
+  }
+
+  // Issue #18: validate context payload if provided
+  if (args.contextPayload) {
+    try {
+      deserializeContext(args.contextPayload);
+    } catch (err) {
+      throw new Error(
+        `Invalid contextPayload: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   const transport = args.pool ? "pool" : args.agent ? "cli" : "a2a";
@@ -39,6 +55,7 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
     spawnMode: args.spawnMode,
     timeoutMs: args.timeoutMs,
     authHeaders,
+    contextPayload: args.contextPayload,
   });
 
   logHandoffEvent({
@@ -53,6 +70,83 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
     workingDirectory: args.workingDirectory,
     spawnMode: args.spawnMode,
   });
+
+  // Issue #19: two-phase handshake when DoD criteria are provided
+  if (args.dodCriteria && args.dodCriteria.length > 0) {
+    const proposal = createProposal({
+      senderJobId: job.id,
+      prompt: args.prompt,
+      contextPayload: args.contextPayload,
+      dodCriteria: args.dodCriteria.map((c) => ({
+        id: c.id,
+        description: c.description,
+        required: c.required ?? true,
+      })),
+    });
+
+    logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "handshake_proposed",
+      jobId: job.id,
+      transport,
+    });
+
+    // In the MCP context the receiver is the remote agent; here we exercise the
+    // local path so the sender can validate the proposal before queuing/spawning.
+    // For remote A2A receivers, the proposal would be transmitted over the wire.
+    // We assume local receiver capabilities from the environment or empty set when
+    // not configured — callers can extend this by setting RECEIVER_CAPABILITIES.
+    const receiverCapabilities = (process.env.RECEIVER_CAPABILITIES ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const response = await executeHandshake(proposal, receiverCapabilities, job.id);
+
+    if (!response.accepted) {
+      updateJob(job.id, {
+        status: "failed",
+        handshakeStatus: "rejected",
+        handshakeRejectionReason: response.reason,
+        completedAt: new Date().toISOString(),
+        error: `Handshake rejected: ${response.reason}${response.detail ? ` — ${response.detail}` : ""}`,
+      });
+
+      logHandoffEvent({
+        timestamp: new Date().toISOString(),
+        event: "handshake_rejected",
+        jobId: job.id,
+        transport,
+        error: response.reason,
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              jobId: job.id,
+              status: "failed",
+              handshakeStatus: "rejected",
+              reason: response.reason,
+              detail: response.detail,
+            },
+            null,
+            2,
+          ),
+        }],
+      };
+    }
+
+    updateJob(job.id, { handshakeStatus: "accepted" });
+
+    logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "handshake_accepted",
+      jobId: job.id,
+      transport,
+    });
+  }
 
   // Pool mode: enqueue for worker pickup instead of spawning
   if (args.pool) {

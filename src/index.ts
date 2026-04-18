@@ -41,6 +41,13 @@ server.tool(
     timeoutMs: z.number().optional().describe("Timeout in milliseconds (default: 300000)"),
     spawnMode: z.enum(["headless", "tmux"]).optional().describe("Spawn mode: 'headless' (default) runs as background process, 'tmux' runs in visible tmux pane"),
     pool: z.boolean().optional().describe("If true, queue the task for worker pool pickup instead of direct spawn"),
+    contextPayload: z.string().optional().describe("Base64-encoded HandoffContext for multi-session task continuation (serialized via serializeContext())"),
+    senderSpiffeId: z.string().optional().describe("SPIFFE ID of the sending agent; triggers SVID verification when envelope is present"),
+    dodCriteria: z.array(z.object({
+      id: z.string().describe("Machine-readable criterion key, e.g. 'tests_pass'"),
+      description: z.string().describe("Human-readable description of the criterion"),
+      required: z.boolean().optional().describe("Whether this is a required DoD criterion (default: true)"),
+    })).optional().describe("Definition of Done criteria for two-phase handshake; receiver must accept all required criteria before task proceeds"),
   },
   async (args) => handleHandoffTask(args)
 );
