@@ -6,6 +6,9 @@ import { eventsRoute } from "./routes/events.js";
 import { reviewCommentRoutes } from "./routes/review-comments.js";
 import { checkRunRoutes } from "./routes/check-runs.js";
 import { decisionRoutes } from "./routes/decisions.js";
+import { approvalRoutes } from "./routes/approvals.js";
+import { agentAssignmentRoutes } from "./routes/agent-assignments.js";
+import { agentSessionRoutes } from "./routes/agent-sessions.js";
 import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
@@ -98,6 +101,22 @@ export function createApiServer(options: ServerOptions) {
         return decisionResponse.then((r) => addCors(r, origin));
       }
       if (decisionResponse) return addCors(decisionResponse, origin);
+
+      // Agent assignment + session routes (PRD-020)
+      const assignResponse = agentAssignmentRoutes(db, path, req);
+      if (assignResponse instanceof Promise) return assignResponse.then((r) => addCors(r, origin));
+      if (assignResponse) return addCors(assignResponse, origin);
+
+      const sessionResponse = agentSessionRoutes(db, path, req);
+      if (sessionResponse instanceof Promise) return sessionResponse.then((r) => addCors(r, origin));
+      if (sessionResponse) return addCors(sessionResponse, origin);
+
+      // Approval routes (HITL)
+      const approvalResponse = approvalRoutes(db, sse, path, req);
+      if (approvalResponse instanceof Promise) {
+        return approvalResponse.then((r) => addCors(r, origin));
+      }
+      if (approvalResponse) return addCors(approvalResponse, origin);
 
       return addCors(notFound(), origin);
     },

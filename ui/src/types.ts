@@ -99,3 +99,36 @@ export interface FSMCheckpoint {
   ts: string;
   metadata: string | null;
 }
+
+export type AgentTool = "claude-code" | "codex" | "cursor" | "copilot-cli" | "gemini" | "aider" | "human";
+
+export const TOOL_LABELS: Record<AgentTool, string> = {
+  "claude-code":  "Claude Code",
+  "codex":        "Codex",
+  "cursor":       "Cursor",
+  "copilot-cli":  "Copilot CLI",
+  "gemini":       "Gemini",
+  "aider":        "Aider",
+  "human":        "Human (HITL)",
+};
+
+export interface AgentAssignment {
+  id: string;
+  fsm_state: string;
+  role: string;
+  tool: AgentTool;
+  enabled: boolean;
+  updated_at: string;
+}
+
+export type SessionStatus = "waiting" | "busy" | "done" | "disconnected";
+
+export interface AgentSession {
+  id: string;
+  tool: string;
+  roles: string[];
+  status: SessionStatus;
+  connected_at: string;
+  last_heartbeat: string;
+  current_change_set_id: string | null;
+}

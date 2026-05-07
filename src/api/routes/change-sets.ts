@@ -11,6 +11,7 @@ import {
 } from "../../domain/change-set.js";
 import { InvalidTransitionError } from "../../fsm/errors.js";
 import { FSMEngine } from "../../fsm/engine.js";
+import { HITLGate, HITLPendingError } from "../../fsm/hitl.js";
 import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
 
@@ -52,24 +53,43 @@ export function changeSetRoutes(
   }
 
   // PATCH /api/change-sets/:id/status
+  // Accepts { trigger: string } for FSM-driven transitions (routed through HITLGate),
+  // or legacy { status: string } for direct status overrides (admin/test use only).
   const statusMatch = path.match(/^\/api\/change-sets\/(chg_\d{6})\/status$/);
   if (statusMatch && method === "PATCH") {
     const id = statusMatch[1];
     return req.json().then((body: unknown) => {
-      const parsed = ChangeSetStatusSchema.safeParse(
-        (body as Record<string, unknown>)?.status
-      );
+      const b = body as Record<string, unknown>;
+
+      // Trigger-based transition (preferred path)
+      if (typeof b?.trigger === "string") {
+        const cs = getChangeSet(db, id);
+        if (!cs) return notFound("ChangeSet not found");
+        try {
+          const gate = new HITLGate(db, sse);
+          const result = gate.transition(id, b.trigger);
+          if (result.status === "pending") {
+            return json({ status: "awaiting_human_approval", approvalId: result.approvalId }, 202);
+          }
+          return json(getChangeSet(db, id));
+        } catch (e) {
+          if (e instanceof InvalidTransitionError) return badRequest(e.message, 422);
+          if (e instanceof HITLPendingError) return badRequest(e.message, 409);
+          return err(e instanceof Error ? e.message : String(e));
+        }
+      }
+
+      // Legacy direct-status override (bypasses FSM — kept for tests/admin)
+      const parsed = ChangeSetStatusSchema.safeParse(b?.status);
       if (!parsed.success) {
-        return badRequest(`Invalid status: ${(body as Record<string, unknown>)?.status}`);
+        return badRequest(`Provide { trigger } for FSM transition or { status } for direct override`);
       }
       try {
         const cs = setChangeSetStatus(db, id, parsed.data);
         sse.emit({ type: "change_set_updated", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
         return json(cs);
       } catch (e) {
-        if (e instanceof InvalidTransitionError) {
-          return badRequest(e.message, 422);
-        }
+        if (e instanceof InvalidTransitionError) return badRequest(e.message, 422);
         return err(e instanceof Error ? e.message : String(e));
       }
     }) as unknown as Response;

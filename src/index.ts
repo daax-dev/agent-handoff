@@ -19,6 +19,8 @@ import { handleRequestChanges } from "./mcp-tools/request-changes.js";
 import { handleApproveChangeSet } from "./mcp-tools/approve-change-set.js";
 import { handleGetHandoffContext } from "./mcp-tools/get-handoff-context.js";
 import { handleLogDecision } from "./mcp-tools/log-decision.js";
+import { handleClaimTask, handleCompleteTask } from "./mcp-tools/claim-task.js";
+import { registerSession, heartbeat, disconnectSession } from "./domain/agent-session.js";
 import { getDb } from "./db.js";
 
 const server = new McpServer({
@@ -249,6 +251,83 @@ server.tool(
     return handleLogDecision(args as Record<string, unknown>, db);
   }
 );
+
+// Tool: register_session — pre-spawned agent announces itself
+server.tool(
+  "register_session",
+  "Register this agent as a pre-spawned session available for task dispatch. Call once at startup, then poll claim_task to receive work.",
+  {
+    tool: z.enum(["claude-code", "codex", "cursor", "copilot-cli", "gemini", "aider", "human"]).describe("This agent's tool identifier"),
+    roles: z.array(z.string()).optional().describe("Roles this session can handle (empty = any role)"),
+  },
+  async (args) => {
+    const db = getDb();
+    const session = registerSession(db, args.tool, args.roles ?? []);
+    return mcpText({ sessionId: session.id, status: session.status, message: "Registered. Poll claim_task with this sessionId to receive work." });
+  }
+);
+
+// Tool: claim_task — agent polls to pick up queued work
+server.tool(
+  "claim_task",
+  "Poll for a queued task. Returns { claimed: true, changeSetId, role, context } when work is available, or { claimed: false } when idle. Also refreshes the session heartbeat.",
+  {
+    sessionId: z.string().describe("Session ID returned by register_session"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleClaimTask(args, db);
+  }
+);
+
+// Tool: complete_task — agent signals it has finished
+server.tool(
+  "complete_task",
+  "Signal that the current task is complete and this session is ready for more work. Transitions session status from busy back to waiting.",
+  {
+    sessionId: z.string().describe("Session ID returned by register_session"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleCompleteTask(args, db);
+  }
+);
+
+// Tool: session_heartbeat — keep-alive for pre-spawned sessions
+server.tool(
+  "session_heartbeat",
+  "Send a heartbeat to keep the session alive. Call every 30 seconds. Sessions not heartbeating for >90s are marked disconnected.",
+  {
+    sessionId: z.string().describe("Session ID to heartbeat"),
+  },
+  async (args) => {
+    const db = getDb();
+    const session = heartbeat(db, args.sessionId);
+    if (!session) return mcpError({ error: `Session ${args.sessionId} not found` });
+    return mcpText({ ok: true, status: session.status });
+  }
+);
+
+// Tool: disconnect_session — clean shutdown
+server.tool(
+  "disconnect_session",
+  "Mark this session as disconnected (clean shutdown). Call before exiting.",
+  {
+    sessionId: z.string().describe("Session ID to disconnect"),
+  },
+  async (args) => {
+    const db = getDb();
+    disconnectSession(db, args.sessionId);
+    return mcpText({ ok: true });
+  }
+);
+
+function mcpText(data: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+}
+function mcpError(data: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
+}
 
 // Start server
 async function main() {

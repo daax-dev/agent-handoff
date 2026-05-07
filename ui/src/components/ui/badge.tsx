@@ -3,30 +3,33 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
-        success:
-          "border-transparent bg-green-100 text-green-800 hover:bg-green-100/80",
-        warning:
-          "border-transparent bg-yellow-100 text-yellow-800 hover:bg-yellow-100/80",
-        info:
-          "border-transparent bg-blue-100 text-blue-800 hover:bg-blue-100/80",
-        muted:
-          "border-transparent bg-muted text-muted-foreground",
+        default:           "bg-primary/10 text-primary ring-primary/20",
+        secondary:         "bg-secondary text-secondary-foreground ring-border",
+        destructive:       "bg-destructive/10 text-destructive ring-destructive/20",
+        outline:           "text-foreground ring-border",
+        // Status variants
+        draft:             "bg-status-draft/10 text-status-draft ring-status-draft/20",
+        planned:           "bg-status-planned/10 text-status-planned ring-status-planned/20",
+        implementing:      "bg-status-implementing/10 text-status-implementing ring-status-implementing/20",
+        reviewing:         "bg-status-reviewing/10 text-status-reviewing ring-status-reviewing/20",
+        changes_requested: "bg-status-changes_requested/10 text-status-changes_requested ring-status-changes_requested/20",
+        approved:          "bg-status-approved/10 text-status-approved ring-status-approved/20",
+        conflict:          "bg-status-conflict/10 text-status-conflict ring-status-conflict/20",
+        merged:            "bg-status-merged/10 text-status-merged ring-status-merged/20",
+        abandoned:         "bg-status-abandoned/10 text-status-abandoned ring-status-abandoned/20",
+        hitl:              "bg-status-hitl/10 text-status-hitl ring-status-hitl/20 animate-pulse",
+        // Generic semantic
+        success: "bg-status-approved/10 text-status-approved ring-status-approved/20",
+        warning: "bg-status-reviewing/10 text-status-reviewing ring-status-reviewing/20",
+        info:    "bg-status-planned/10 text-status-planned ring-status-planned/20",
+        muted:   "bg-muted text-muted-foreground ring-border",
       },
     },
-    defaultVariants: {
-      variant: "default",
-    },
+    defaultVariants: { variant: "default" },
   }
 );
 
@@ -35,9 +38,7 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };
