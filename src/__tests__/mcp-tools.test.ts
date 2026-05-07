@@ -211,7 +211,7 @@ function seedPassedChecks(db: Database, changeSetId: string) {
 }
 
 describe("approve_change_set MCP tool", () => {
-  test("transitions reviewing → approved when checks pass", async () => {
+  test("transitions reviewing → awaiting_human_approval (HITL gates approve trigger)", async () => {
     const cs = newCs(db, "040");
     const fsm = new FSMEngine(db);
     fsm.transition(cs.id, "plan_accepted");
@@ -224,7 +224,31 @@ describe("approve_change_set MCP tool", () => {
       db
     );
     const data = parse(result);
-    expect(data.status).toBe("approved");
+    expect(result.isError).toBeFalsy();
+    expect(data.status).toBe("awaiting_human_approval");
+    expect(data.approvalId).toBeDefined();
+  });
+
+  test("transitions reviewing → approved when HITL disabled", async () => {
+    process.env.LOCALSDLC_HITL_ENABLED = "false";
+    try {
+      const cs = newCs(db, "043");
+      const fsm = new FSMEngine(db);
+      fsm.transition(cs.id, "plan_accepted");
+      fsm.transition(cs.id, "assign_implementer");
+      fsm.transition(cs.id, "submit_for_review");
+      seedPassedChecks(db, cs.id);
+
+      const result = await handleApproveChangeSet(
+        { changeSetId: cs.id, summary: "LGTM" },
+        db
+      );
+      const data = parse(result);
+      expect(result.isError).toBeFalsy();
+      expect(data.status).toBe("approved");
+    } finally {
+      delete process.env.LOCALSDLC_HITL_ENABLED;
+    }
   });
 
   test("returns error when required checks have not passed", async () => {

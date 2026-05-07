@@ -1,8 +1,9 @@
 import type { Database } from "bun:sqlite";
-import { FSMEngine } from "../fsm/engine.js";
 import { InvalidTransitionError } from "../fsm/errors.js";
+import { HITLGate, HITLPendingError } from "../fsm/hitl.js";
 import { allRequiredPassed } from "../domain/check-run.js";
 import { REQUIRED_CHECK_NAMES } from "../checks/check-config.js";
+import { broadcaster } from "../api/sse.js";
 
 import { mcpText, mcpError } from "./response.js";
 
@@ -17,15 +18,23 @@ export async function handleApproveChangeSet(args: Input, db: Database) {
     });
   }
 
-  // MVP-3/4: no HITL gate yet (PRD-006 is MVP-6).
-  const fsm = new FSMEngine(db);
+  const gate = new HITLGate(db, broadcaster);
   try {
-    const newStatus = fsm.transition(args.changeSetId, "approve", {
-      metadata: { summary: args.summary },
-    });
-    return mcpText({ changeSetId: args.changeSetId, status: newStatus });
+    const result = gate.transition(args.changeSetId, "approve");
+    if (result.status === "pending") {
+      return mcpText({
+        changeSetId: args.changeSetId,
+        status: "awaiting_human_approval",
+        approvalId: result.approvalId,
+        message: "Human approval required. Use `localsdlc approve` or the dashboard to proceed.",
+      });
+    }
+    return mcpText({ changeSetId: args.changeSetId, status: result.newStatus });
   } catch (e) {
     if (e instanceof InvalidTransitionError) {
+      return mcpError({ error: e.message, changeSetId: args.changeSetId });
+    }
+    if (e instanceof HITLPendingError) {
       return mcpError({ error: e.message, changeSetId: args.changeSetId });
     }
     return mcpError({ error: e instanceof Error ? e.message : String(e) });

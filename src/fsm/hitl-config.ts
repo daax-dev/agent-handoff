@@ -7,6 +7,6 @@ export function getHITLConfig(): HITLConfig {
   const enabled = process.env.LOCALSDLC_HITL_ENABLED !== "false";
   return {
     enabled,
-    gatedTriggers: ["approve", "merge", "escalated"],
+    gatedTriggers: ["approve", "merge"],
   };
 }

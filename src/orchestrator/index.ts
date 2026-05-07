@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getAssignment } from "../domain/agent-assignment.js";
 import { markBusy, listSessions } from "../domain/agent-session.js";
 import { HandoffContextBuilder } from "../context/handoff-context.js";
-import { AgentRoleRegistry } from "../roles/registry.js";
+import { getRegistry } from "../roles/registry.js";
 import { spawnAgent, isToolSpawnable } from "./spawner.js";
 import { dispatchToSession } from "./dispatcher.js";
 
@@ -54,7 +54,7 @@ export class AgentOrchestrator {
     }
 
     // Build handoff context
-    const registry = new AgentRoleRegistry(this.repoRoot);
+    const registry = getRegistry(this.repoRoot);
     const builder = new HandoffContextBuilder(this.db, this.repoRoot, registry);
     let handoffContent: string;
     try {

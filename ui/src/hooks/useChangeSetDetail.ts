@@ -43,7 +43,7 @@ async function resolveComment(csId: string, commentId: string): Promise<ReviewCo
   const res = await fetch(`${API}/change-sets/${csId}/comments/${commentId}/resolve`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resolved_by: "human" }),
+    body: JSON.stringify({ resolvedBy: "human" }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Unknown error" }));

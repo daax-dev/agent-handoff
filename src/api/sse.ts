@@ -1,4 +1,4 @@
-import { watch, existsSync, mkdirSync } from "node:fs";
+import { watch, existsSync, mkdirSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import type { FSWatcher } from "node:fs";
 
@@ -66,15 +66,15 @@ export class SSEBroadcaster {
     mkdirSync(logsDir, { recursive: true });
     const logPath = resolve(logsDir, `${taskId}.log`);
 
-    let offset = 0;
+    let byteOffset = 0;
 
     const flush = () => {
       if (!existsSync(logPath)) return;
-      const file = Bun.file(logPath);
-      file.text().then((content) => {
-        if (content.length <= offset) return;
-        const newContent = content.slice(offset);
-        offset = content.length;
+      const fileSize = statSync(logPath).size;
+      if (fileSize <= byteOffset) return;
+      // Read only the new bytes since last flush
+      Bun.file(logPath).slice(byteOffset, fileSize).text().then((newContent) => {
+        byteOffset = fileSize;
         for (const line of newContent.split("\n")) {
           if (line.trim()) {
             this.emit({
