@@ -1,0 +1,115 @@
+name: "PRD-022: Clean Install + Zero-Friction Dev Setup"
+description: "A first-time developer should be able to clone the repo, run one command, and have the full stack running with no manual steps, no pre-existing state, no port conflicts, and no configuration required."
+area: tooling
+goal: >
+  From a clean clone (no .work/, no node_modules, no bun.lockb conflicts), a single
+  command bootstraps everything:
+    bun run setup   — installs deps, creates DB, seeds defaults
+    bun run dev:web — starts full stack, prints access URLs
+
+  Zero decisions required. Zero docs to read. Zero port fights. If something is already
+  running on a port, the system finds the next one and tells you.
+  This is table stakes for an AI agent coordination system — if a human can't start it
+  easily, agents definitely can't coordinate with it.
+
+output_format: |
+  - scripts/setup.ts          — Setup script: install deps, create .work dirs, run migrations,
+                                seed default data, verify health
+  - package.json              — "setup" script added; "dev:web" updated to call setup if needed
+  - .gitignore                — Ensure .work/, *.db, *.db-wal, *.db-shm, .env.local are ignored
+  - README.md                 — Replace placeholder with: Prerequisites, Setup (2 commands),
+                                What each process does, Port table, Troubleshooting (3 scenarios)
+  - .env.example              — All configurable env vars with sane defaults and comments
+
+constraints: |
+  SETUP SCRIPT (scripts/setup.ts):
+    1. Check bun version (>=1.0.0); fail with install instruction if not found.
+    2. `bun install` in root and in ui/.
+    3. Create .work/{tasks,logs,worktrees,specs} directories idempotently.
+    4. Run DB migrations (same as openTestDb but against the production DB path).
+    5. Seed agent_assignments defaults (calls domain function, idempotent).
+    6. Write .env.local with defaults if it does not exist (never overwrite existing).
+    7. Print a startup summary:
+         ✓ Dependencies installed
+         ✓ Database initialized (migrations/00N applied)
+         ✓ Agent assignments seeded (N defaults)
+         ✓ Ready. Run: bun run dev:web
+
+  DEV:WEB SCRIPT:
+    - Checks for .work/ existence; if missing, runs setup automatically.
+    - Finds available API port (4000–4009), sets PORT and VITE_API_PORT.
+    - Finds available UI port (5173–5182), sets it for Vite.
+    - Starts API and UI with labeled output.
+    - On startup, prints:
+        ┌─────────────────────────────────┐
+        │  Local SDLC — Dev Stack         │
+        │  API → http://localhost:4000    │
+        │  UI  → http://localhost:5173    │
+        │  MCP → stdio (connect via CLI)  │
+        └─────────────────────────────────┘
+
+  GITIGNORE:
+    .work/           — all runtime state
+    *.db *.db-wal *.db-shm  — SQLite files
+    .env.local       — local overrides
+    dist/            — build output (already ignored in ui/)
+    node_modules/    — already there but confirm
+
+  README.md STRUCTURE:
+    ## Prerequisites
+    - Bun >=1.0.0  (brew install oven-sh/bun/bun)
+
+    ## Quick Start
+    ```bash
+    git clone <repo>
+    cd agent-handoff
+    bun run setup
+    bun run dev:web
+    ```
+    Open http://localhost:5173
+
+    ## What runs
+    | Process | Default Port | Purpose |
+    | API server | 4000 | REST + SSE + SQLite |
+    | UI dev server | 5173 | React SPA |
+    | MCP server | stdio | Agent tool calls |
+
+    ## Ports
+    The system finds the next available port in range 4000–4009 (API) and 5173–5182 (UI).
+    If you need fixed ports, set PORT and VITE_UI_PORT in .env.local.
+
+    ## Connect an agent
+    Add to your Claude Code settings:
+    ```json
+    { "mcpServers": { "agent-handoff": { "command": "bun", "args": ["run", "src/index.ts"], "cwd": "<path>" } } }
+    ```
+
+failure_conditions: |
+  - `bun run setup` fails on a clean clone with no error message explaining why.
+  - `bun run dev:web` starts but silently fails to run migrations, causing 500 errors.
+  - README instructions are more than 5 steps to get a running UI.
+  - Setup script overwrites existing .env.local (must be idempotent).
+  - DB path is not shown in the startup summary (developer can't find their data).
+
+acceptance: |
+  - Criterion: Clean clone → running UI in 2 commands.
+    Verification: rm -rf .work/ node_modules/ ui/node_modules/; run setup + dev:web;
+    http://localhost:5173 loads KanbanBoard with no errors in console.
+
+  - Criterion: Idempotent setup.
+    Verification: Run `bun run setup` twice; no errors, no duplicate data.
+
+  - Criterion: Port conflict produces clear output.
+    Verification: nc -l 4000 &; run dev:web; output shows "API → http://localhost:4001 (4000 in use)".
+
+  - Criterion: README has exact commands that work.
+    Verification: Follow README from scratch on a machine with only bun installed; UI loads.
+
+out_of_scope: |
+  - Docker / devcontainer setup.
+  - Windows support (macOS + Linux only).
+  - Automated test of the clean-install path in CI (manual verification only for MVP).
+
+reuse_map: |
+  - Wraps: PRD-018 (port management), database migrations system.
+  - Updates: README replaces placeholder content.

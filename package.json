@@ -27,8 +27,12 @@
     "access": "public"
   },
   "scripts": {
+    "setup": "bun scripts/setup.ts",
     "start": "bun run src/index.ts",
     "dev": "bun --watch run src/index.ts",
+    "dev:web": "bash scripts/dev-web.sh",
+    "dev:api": "bun run src/api/server.ts",
+    "dev:ui": "bun --cwd ui run dev",
     "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

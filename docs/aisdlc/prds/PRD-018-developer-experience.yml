@@ -1,0 +1,60 @@
+name: "PRD-018: Developer Experience — Process Management + One-Command Startup"
+description: "Replace the fragile kill-and-restart dev script with proper port detection, a process manager, and a single command that starts the full stack with clear, labeled output."
+area: tooling
+goal: >
+  A developer (or CI) should be able to run one command from the repo root and have the
+  entire local stack — API server, UI dev server, and MCP server — running with labeled
+  output, automatic port negotiation (never killing existing processes), and clean shutdown
+  on Ctrl-C. The system must self-document its port assignments on startup.
+
+output_format: |
+  - scripts/dev-web.sh              — Rewrites: find next available API port, no kill
+  - scripts/start.ts                — Bun script: orchestrates all three processes with
+                                      labeled, color-coded stdout (API=blue, UI=green, MCP=yellow)
+  - package.json                    — Updated scripts: dev:web, dev:api, dev:ui, dev:mcp, start:all
+  - ui/vite.config.ts               — Reads VITE_API_PORT env var for proxy target
+  - .env.example                    — Documents PORT, VITE_API_PORT, MCP_PORT vars
+
+constraints: |
+  - Never kill an existing process. If port N is in use, try N+1, N+2, up to N+9.
+    If all 10 are exhausted, fail with a clear error message naming the blocked ports.
+  - When the API starts on a non-default port (e.g. 4001), print clearly:
+      ✓ API server → http://localhost:4001  (4000 was in use)
+  - Vite proxy must pick up the actual API port via VITE_API_PORT env var — set by the
+    start script before launching Vite.
+  - All three processes (API, UI, MCP) must share stdout with a fixed-width label prefix:
+      [API] listening on :4001
+      [UI ] ready on http://localhost:5173
+      [MCP] stdio ready
+  - Ctrl-C on the orchestrator script kills all child processes cleanly (SIGTERM, then SIGKILL
+    after 3s if not exited).
+  - A SIGPIPE from one child (e.g. UI crashes) should NOT kill the other children.
+  - Health check: after startup, the script hits /api/health and prints pass/fail.
+
+failure_conditions: |
+  - Script kills an unrelated process that happens to be on port 4000.
+  - Vite proxies to wrong port when API is on 4001 (proxy not updated).
+  - Ctrl-C leaves zombie API or MCP processes running.
+  - Output from API and UI are interleaved without labels, making debugging impossible.
+
+acceptance: |
+  - Criterion: One command starts full stack.
+    Verification: `bun run dev:web` from repo root starts API + UI, both healthy, no manual steps.
+
+  - Criterion: Port conflict is handled gracefully.
+    Verification: With port 4000 occupied (nc -l 4000 &), `bun run dev:web` uses 4001 and prints which port.
+
+  - Criterion: Ctrl-C cleanly shuts down all children.
+    Verification: After `bun run dev:web`, Ctrl-C leaves no bun processes for port 4000 or 5173.
+
+  - Criterion: Vite proxy follows the actual port.
+    Verification: When API starts on 4001, `curl http://localhost:5173/api/health` succeeds.
+
+out_of_scope: |
+  - Docker / container-based dev setup.
+  - Automatic browser open on startup (add --open flag manually if wanted).
+  - Log file rotation or persistent startup logs.
+
+reuse_map: |
+  - Updates: existing scripts/dev-web.sh and package.json.
+  - Informs: PRD-020 (UI must not hard-code port 4000 in any fetch calls).

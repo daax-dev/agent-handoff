@@ -1,0 +1,92 @@
+name: "PRD-019: Theme System + Visual Design Overhaul"
+description: "Replace the generic AI-generated gray shadcn defaults with a real design system: dark/light mode toggle persisted to localStorage, a proper color palette, readable typography, and a UI that looks like a professional engineering tool rather than a boilerplate starter."
+area: external-frontend
+goal: >
+  The UI must look intentional. Right now it is gray text on white with no visual hierarchy,
+  no brand character, and no dark mode. A developer using this tool all day needs:
+  (1) dark mode that persists across page loads,
+  (2) color-coded status indicators that communicate state at a glance,
+  (3) typography that is readable at 80%-zoom on a wide monitor,
+  (4) a visual language that is consistent across all pages.
+  This is not cosmetic polish — it is functional communication through design.
+
+output_format: |
+  - ui/src/index.css                     — New: real light + dark CSS variable sets,
+                                           improved typography scale, scrollbar styling
+  - ui/tailwind.config.js               — Add darkMode: 'class', extended color palette
+  - ui/src/components/ThemeProvider.tsx  — Reads localStorage, applies .dark to <html>,
+                                           exposes useTheme() hook
+  - ui/src/components/ThemeToggle.tsx    — Sun/Moon icon button for the Nav
+  - ui/src/components/ui/badge.tsx       — Rewrite: status-aware color variants that
+                                           actually communicate urgency
+  - ui/src/App.tsx                       — Wrap in ThemeProvider, add ThemeToggle to Nav
+  - ui/src/pages/KanbanBoard.tsx         — Visual redesign: colored column headers, better
+                                           card density, sticky column headers on scroll
+  - ui/src/components/ChangeSetCard.tsx  — Redesign: visual hierarchy, colored left border
+                                           per status, metadata in a scannable layout
+  - ui/src/pages/ChangeSetDetail.tsx     — Redesign: proper tab chrome, side-by-side layout
+                                           on wide screens, diff takes most of the space
+
+constraints: |
+  - Dark mode toggle must persist to localStorage key "theme". On load, check localStorage
+    before defaulting to system preference (prefers-color-scheme).
+  - No flash of wrong theme on load. Apply theme class in a <script> in index.html
+    before React renders (eliminates FOUC).
+  - Color palette: use a slate-based neutral scale for backgrounds, violet/indigo for
+    primary actions, and semantic colors for status:
+      draft: slate
+      planned: blue
+      implementing: indigo
+      reviewing: amber
+      changes_requested: orange
+      approved: emerald
+      conflict_detected: red
+      merged: green
+      abandoned: slate (muted)
+      awaiting_human_approval: violet (pulsing border)
+  - Typography: Inter or system-ui, 14px base, 1.5 line-height for body,
+    12px monospace for IDs/paths/code.
+  - Kanban columns: fixed width 220px, colored top border matching status color,
+    scrollable card list, sticky header.
+  - Cards: left border 3px colored by status, title is the primary element,
+    ID and branch in 12px monospace below. Created-at relative time at bottom right.
+    No decorative elements that don't communicate information.
+  - All colors must have a dark-mode equivalent. No component may hard-code a hex color;
+    all colors go through Tailwind tokens.
+  - Accessibility: color is never the only differentiator — status must also have a
+    text label or icon.
+
+failure_conditions: |
+  - FOUC (flash of wrong theme) on page load.
+  - Dark mode toggle does not persist across page refresh.
+  - Status badge colors are the same in light and dark mode (copy-paste failure).
+  - Kanban columns are not scrollable independently when cards overflow.
+  - Any component uses a hard-coded hex color instead of a Tailwind token.
+
+acceptance: |
+  - Criterion: Dark mode persists.
+    Verification: Toggle to dark, refresh page — dark mode is still active.
+
+  - Criterion: No FOUC.
+    Verification: Chrome DevTools → Performance → record page load; no white flash
+    before dark background appears.
+
+  - Criterion: Status colors communicate urgency.
+    Verification: At a glance, "changes_requested" (orange) and "approved" (emerald)
+    are immediately distinguishable without reading the label text.
+
+  - Criterion: `cd ui && bun run typecheck` exits 0.
+    Verification: TypeScript strict mode passes with all new components.
+
+  - Criterion: `cd ui && bun run build` exits 0.
+    Verification: Production build succeeds.
+
+out_of_scope: |
+  - Custom font loading (system-ui is acceptable for MVP).
+  - Animations beyond the existing Tailwind animate-* utilities.
+  - Mobile / responsive layout (desktop-first, min-width 1200px is fine).
+  - Theming via CSS-in-JS or styled-components.
+
+reuse_map: |
+  - Replaces: existing index.css variables and badge.tsx.
+  - Informs: all subsequent UI PRDs use the new token system.

@@ -8,10 +8,14 @@ import { checkRunRoutes } from "./routes/check-runs.js";
 import { decisionRoutes } from "./routes/decisions.js";
 import { json, notFound } from "./response.js";
 
-const ALLOWED_ORIGINS = ["http://localhost:5173", "http://localhost:4000", "http://127.0.0.1:5173"];
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  // Allow any localhost port in API range (4000-4009) or UI range (5173-5182)
+  return /^http:\/\/(localhost|127\.0\.0\.1):(4\d{3}|517[3-9]|518[0-2])$/.test(origin);
+}
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = isAllowedOrigin(origin) ? origin! : "http://localhost:5173";
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
