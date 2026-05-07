@@ -18,6 +18,7 @@ import { InvalidTransitionError } from "../../fsm/errors.js";
 import { FSMEngine } from "../../fsm/engine.js";
 import { HITLGate, HITLPendingError } from "../../fsm/hitl.js";
 import { PRBodyBuilder } from "../../bridge/pr-body-builder.js";
+import { SpecStore } from "../../spec/store.js";
 import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
 
@@ -25,7 +26,8 @@ export function changeSetRoutes(
   db: Database,
   sse: SSEBroadcaster,
   path: string,
-  req: Request
+  req: Request,
+  repoRoot?: string
 ): Response | Promise<Response> | null {
   const url = new URL(req.url);
   const { method } = req;
@@ -71,6 +73,12 @@ export function changeSetRoutes(
         return badRequest(parsed.error.message);
       }
       const cs = importChangeSetFromGitHub(db, parsed.data);
+      if (parsed.data.specContent) {
+        try {
+          const store = new SpecStore(repoRoot);
+          store.write(cs.task_id, "spec", parsed.data.specContent);
+        } catch { /* non-fatal: spec_content is stored in DB as fallback */ }
+      }
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       return json(cs, 201);
     }) as unknown as Response;
@@ -179,6 +187,11 @@ export function changeSetRoutes(
       }
       const cs = setGithubPrUrl(db, id, b.url);
       if (!cs) return notFound("ChangeSet not found");
+      sse.emit({
+        type: "exported",
+        payload: { changeSetId: id, prUrl: b.url },
+        ts: new Date().toISOString(),
+      });
       return json(cs);
     }) as unknown as Response;
   }

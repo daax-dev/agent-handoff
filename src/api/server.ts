@@ -43,11 +43,13 @@ export interface ServerOptions {
   port?: number;
   db: Database;
   sse?: SSEBroadcaster;
+  repoRoot?: string;
 }
 
 export function createApiServer(options: ServerOptions) {
   const { db } = options;
   const sse = options.sse ?? defaultBroadcaster;
+  const repoRoot = options.repoRoot;
   const port = options.port ?? parseInt(process.env.PORT ?? "4000", 10);
 
   const server = Bun.serve({
@@ -72,7 +74,7 @@ export function createApiServer(options: ServerOptions) {
       if (eventsResponse) return addCors(eventsResponse, origin);
 
       // ChangeSet routes
-      const csResponse = changeSetRoutes(db, sse, path, req);
+      const csResponse = changeSetRoutes(db, sse, path, req, repoRoot);
       if (csResponse instanceof Promise) {
         return csResponse.then((r) => addCors(r, origin));
       }

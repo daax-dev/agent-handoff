@@ -1,8 +1,9 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { resolve } from "node:path";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { resolve, join } from "node:path";
+import { mkdirSync, writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { openTestDb } from "../db.js";
-import { SSEBroadcaster } from "../api/sse.js";
+import { SSEBroadcaster, type SSEEvent } from "../api/sse.js";
 import { createApiServer } from "../api/server.js";
 
 const MIGRATIONS_DIR = resolve(process.cwd(), "migrations");
@@ -558,5 +559,253 @@ describe("CORS headers", () => {
       headers: { Origin: "http://localhost:5173" },
     });
     expect(res.status).toBe(204);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HITL Gate API — PRD-006
+// ---------------------------------------------------------------------------
+
+// Helper: creates a ChangeSet and advances it to "reviewing" via valid FSM transitions
+async function makeCsInReviewing(base: string): Promise<string> {
+  const qc = await fetch(`${base}/api/change-sets/quick-create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "HITL test CS" }),
+  });
+  const cs = (await qc.json()) as { id: string };
+
+  // Advance through valid transitions: draft → planned → implementing → reviewing
+  for (const status of ["planned", "implementing", "reviewing"] as const) {
+    await fetch(`${base}/api/change-sets/${cs.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  }
+  return cs.id;
+}
+
+describe("HITL Gate — POST /api/change-sets/:id/status trigger=approve (PRD-006)", () => {
+  test("pauses ChangeSet in awaiting_human_approval and returns approvalId (PRD-006: approve trigger pauses FSM)", async () => {
+    const csId = await makeCsInReviewing(BASE);
+    const res = await fetch(`${BASE}/api/change-sets/${csId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger: "approve" }),
+    });
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as { status: string; approvalId: string };
+    expect(body.status).toBe("awaiting_human_approval");
+    expect(typeof body.approvalId).toBe("string");
+  });
+});
+
+describe("HITL Gate — POST /api/approvals/:id/approve (PRD-006)", () => {
+  let approvalId: string;
+  let csId: string;
+
+  beforeEach(async () => {
+    csId = await makeCsInReviewing(BASE);
+    const res = await fetch(`${BASE}/api/change-sets/${csId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger: "approve" }),
+    });
+    const body = (await res.json()) as { approvalId: string };
+    approvalId = body.approvalId;
+  });
+
+  test("approve resumes FSM → approved (PRD-006 acceptance: POST /api/approvals/:id/approve resumes FSM)", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${approvalId}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decided_by: "test" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { newStatus: string; decision: string };
+    expect(body.decision).toBe("approved");
+    expect(body.newStatus).toBe("approved");
+
+    const cs = await fetch(`${BASE}/api/change-sets/${csId}`);
+    const csBody = (await cs.json()) as { status: string };
+    expect(csBody.status).toBe("approved");
+  });
+
+  test("reject transitions to changes_requested (PRD-006 acceptance: POST /api/approvals/:id/reject)", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${approvalId}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "security concern", decided_by: "test" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { newStatus: string; decision: string };
+    expect(body.decision).toBe("rejected");
+    expect(body.newStatus).toBe("changes_requested");
+
+    const cs = await fetch(`${BASE}/api/change-sets/${csId}`);
+    const csBody = (await cs.json()) as { status: string };
+    expect(csBody.status).toBe("changes_requested");
+  });
+
+  test("reject without reason returns 400 (PRD-006 failure_conditions: reason is required)", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${approvalId}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decided_by: "test" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("GET /api/approvals/by-changeset/:id returns list with pending approval (PRD-006)", async () => {
+    const res = await fetch(`${BASE}/api/approvals/by-changeset/${csId}`);
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ id: string; decided_at: null }>;
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.some((a) => a.id === approvalId)).toBe(true);
+  });
+});
+
+describe("HITL Gate — 404 for unknown approvalId (PRD-006 failure_conditions)", () => {
+  const unknown = "00000000-0000-0000-0000-000000000000";
+
+  test("GET /api/approvals/:id returns 404 for non-existent id", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${unknown}`);
+    expect(res.status).toBe(404);
+  });
+
+  test("POST /api/approvals/:id/approve returns 404 for non-existent id", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${unknown}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decided_by: "test" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("POST /api/approvals/:id/reject returns 404 for non-existent id", async () => {
+    const res = await fetch(`${BASE}/api/approvals/${unknown}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "n/a" }),
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SSE export event — PRD-017
+// ---------------------------------------------------------------------------
+
+class CapturingSSE extends SSEBroadcaster {
+  captured: SSEEvent[] = [];
+  emit(event: SSEEvent) {
+    this.captured.push(event);
+    super.emit(event);
+  }
+}
+
+describe("PATCH /api/change-sets/:id/github-pr-url emits exported SSE event (PRD-017)", () => {
+  let capDb: ReturnType<typeof openTestDb>;
+  let capSse: CapturingSSE;
+  let capServer: ReturnType<typeof Bun.serve>;
+  let capBase: string;
+
+  beforeAll(() => {
+    capDb = openTestDb(MIGRATIONS_DIR);
+    capSse = new CapturingSSE();
+    const result = createApiServer({ db: capDb, sse: capSse, port: 0 });
+    capServer = result.server;
+    capBase = `http://localhost:${capServer.port}`;
+  });
+
+  afterAll(() => {
+    capSse.close();
+    capServer.stop(true);
+    capDb.close();
+  });
+
+  test("emits { type: 'exported', changeSetId, prUrl } after PATCH (PRD-017: export updates github_pr_url + emits SSE)", async () => {
+    const qc = await fetch(`${capBase}/api/change-sets/quick-create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "SSE export test" }),
+    });
+    const cs = (await qc.json()) as { id: string };
+
+    const prUrl = "https://github.com/example/repo/pull/42";
+    const before = capSse.captured.length;
+    const res = await fetch(`${capBase}/api/change-sets/${cs.id}/github-pr-url`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: prUrl }),
+    });
+    expect(res.status).toBe(200);
+
+    const exportedEvents = capSse.captured.slice(before).filter((e) => e.type === "exported");
+    expect(exportedEvents.length).toBe(1);
+    expect(exportedEvents[0].payload.changeSetId).toBe(cs.id);
+    expect(exportedEvents[0].payload.prUrl).toBe(prUrl);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// from-github-issue writes spec.md — PRD-017
+// ---------------------------------------------------------------------------
+
+describe("POST /api/change-sets/from-github-issue writes spec.md (PRD-017)", () => {
+  let tmpDir: string;
+  let tmpDb: ReturnType<typeof openTestDb>;
+  let tmpSse: SSEBroadcaster;
+  let tmpServer: ReturnType<typeof Bun.serve>;
+  let tmpBase: string;
+
+  beforeAll(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "agent-handoff-spec-test-"));
+    tmpDb = openTestDb(MIGRATIONS_DIR);
+    tmpSse = new SSEBroadcaster();
+    const result = createApiServer({ db: tmpDb, sse: tmpSse, port: 0, repoRoot: tmpDir });
+    tmpServer = result.server;
+    tmpBase = `http://localhost:${tmpServer.port}`;
+  });
+
+  afterAll(() => {
+    tmpSse.close();
+    tmpServer.stop(true);
+    tmpDb.close();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("writes issue body to .work/tasks/:taskId/spec.md (PRD-017 acceptance: import-issue writes spec.md)", async () => {
+    const specContent = "## Problem\nUsers cannot log in after password reset.";
+    const res = await fetch(`${tmpBase}/api/change-sets/from-github-issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Fix password reset login",
+        githubIssueUrl: "https://github.com/example/repo/issues/77",
+        specContent,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const cs = (await res.json()) as { task_id: string };
+
+    const specPath = join(tmpDir, ".work", "tasks", cs.task_id, "spec.md");
+    expect(existsSync(specPath)).toBe(true);
+    expect(readFileSync(specPath, "utf-8")).toBe(specContent);
+  });
+
+  test("spec_content in DB is unchanged when specContent is omitted (no write error)", async () => {
+    const res = await fetch(`${tmpBase}/api/change-sets/from-github-issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "No spec content issue",
+        githubIssueUrl: "https://github.com/example/repo/issues/78",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const cs = (await res.json()) as { task_id: string; spec_content: null };
+    expect(cs.spec_content).toBeNull();
   });
 });

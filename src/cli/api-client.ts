@@ -19,7 +19,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("ECONNREFUSED") || msg.includes("Connection refused") || msg.includes("fetch failed")) {
+    if (msg.includes("ECONNREFUSED") || msg.includes("Connection refused") || msg.includes("fetch failed") || msg.toLowerCase().includes("unable to connect")) {
       throw new ApiError(0, "API server not running. Start it with: bun run dev:api");
     }
     throw e;
@@ -43,7 +43,7 @@ async function getRaw(path: string): Promise<string> {
     res = await fetch(`${BASE_URL}${path}`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("ECONNREFUSED") || msg.includes("Connection refused") || msg.includes("fetch failed")) {
+    if (msg.includes("ECONNREFUSED") || msg.includes("Connection refused") || msg.includes("fetch failed") || msg.toLowerCase().includes("unable to connect")) {
       throw new ApiError(0, "API server not running. Start it with: bun run dev:api");
     }
     throw e;
