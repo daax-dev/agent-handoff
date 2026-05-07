@@ -1,25 +1,17 @@
 import type { Database } from "bun:sqlite";
 import { FSMEngine } from "../fsm/engine.js";
 import { InvalidTransitionError, CircuitBreakerError } from "../fsm/errors.js";
+import { listBlockingComments } from "../domain/review-comment.js";
+
+import { mcpText, mcpError } from "./response.js";
 
 interface Input { changeSetId: string; summary: string }
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-function mcpError(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
-}
-
 export async function handleRequestChanges(args: Input, db: Database) {
   // Guard: require at least one blocking comment
-  const blockingCount = db
-    .query<{ n: number }, [string]>(
-      "SELECT COUNT(*) as n FROM review_comments WHERE change_set_id = ? AND severity = 'blocking' AND resolved = 0"
-    )
-    .get(args.changeSetId);
+  const blocking = listBlockingComments(db, args.changeSetId);
 
-  if (!blockingCount || blockingCount.n === 0) {
+  if (blocking.length === 0) {
     return mcpError({
       error: "Cannot request changes: no blocking review comments exist. Add at least one blocking comment first.",
       changeSetId: args.changeSetId,
@@ -34,7 +26,7 @@ export async function handleRequestChanges(args: Input, db: Database) {
     return mcpText({
       changeSetId: args.changeSetId,
       status: newStatus,
-      blockingCommentCount: blockingCount.n,
+      blockingCommentCount: blocking.length,
     });
   } catch (e) {
     if (e instanceof CircuitBreakerError) {

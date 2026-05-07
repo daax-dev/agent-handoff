@@ -7,6 +7,10 @@ import { createApiServer } from "../api/server.js";
 
 const MIGRATIONS_DIR = resolve(process.cwd(), "migrations");
 
+async function getJson<T = Record<string, unknown>>(res: Response): Promise<T> {
+  return res.json() as Promise<T>;
+}
+
 let db: ReturnType<typeof openTestDb>;
 let sse: SSEBroadcaster;
 let server: ReturnType<typeof Bun.serve>;
@@ -34,7 +38,7 @@ describe("GET /api/health", () => {
   test("returns 200 with ok: true", async () => {
     const res = await fetch(`${BASE}/api/health`);
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await getJson(res);
     expect(body.ok).toBe(true);
     expect(typeof body.ts).toBe("string");
   });
@@ -59,7 +63,7 @@ describe("ChangeSet REST API", () => {
       }),
     });
     expect(res.status).toBe(201);
-    const cs = await res.json();
+    const cs = await getJson<{ id: string; title: string; status: string }>(res);
     expect(cs.id).toMatch(/^chg_\d{6}$/);
     expect(cs.title).toBe("REST test change set");
     expect(cs.status).toBe("draft");
@@ -69,15 +73,15 @@ describe("ChangeSet REST API", () => {
   test("GET /api/change-sets returns array with created ChangeSet", async () => {
     const res = await fetch(`${BASE}/api/change-sets`);
     expect(res.status).toBe(200);
-    const list = await res.json();
+    const list = await getJson<{ id: string }[]>(res);
     expect(Array.isArray(list)).toBe(true);
-    expect(list.some((cs: { id: string }) => cs.id === csId)).toBe(true);
+    expect(list.some((cs) => cs.id === csId)).toBe(true);
   });
 
   test("GET /api/change-sets/:id returns the ChangeSet", async () => {
     const res = await fetch(`${BASE}/api/change-sets/${csId}`);
     expect(res.status).toBe(200);
-    const cs = await res.json();
+    const cs = await getJson(res);
     expect(cs.id).toBe(csId);
   });
 
@@ -93,7 +97,7 @@ describe("ChangeSet REST API", () => {
       body: JSON.stringify({ status: "planned" }),
     });
     expect(res.status).toBe(200);
-    const cs = await res.json();
+    const cs = await getJson(res);
     expect(cs.status).toBe("planned");
   });
 
@@ -104,7 +108,7 @@ describe("ChangeSet REST API", () => {
       body: JSON.stringify({ status: "merged" }),
     });
     expect(res.status).toBe(422);
-    const body = await res.json();
+    const body = await getJson(res);
     expect(body.error).toContain("Invalid transition");
   });
 
@@ -138,7 +142,7 @@ describe("Task REST API", () => {
         worktree_path: ".work/worktrees/TSK-000002",
       }),
     });
-    const cs = await csRes.json();
+    const cs = await getJson<{ id: string }>(csRes);
     csId = cs.id;
 
     const res = await fetch(`${BASE}/api/tasks`, {
@@ -152,7 +156,7 @@ describe("Task REST API", () => {
       }),
     });
     expect(res.status).toBe(201);
-    const task = await res.json();
+    const task = await getJson<{ id: string; status: string }>(res);
     expect(task.id).toMatch(/^TSK_\d{6}$/);
     expect(task.status).toBe("backlog");
     taskId = task.id;
@@ -161,22 +165,22 @@ describe("Task REST API", () => {
   test("GET /api/tasks returns all tasks", async () => {
     const res = await fetch(`${BASE}/api/tasks`);
     expect(res.status).toBe(200);
-    const list = await res.json();
+    const list = await getJson<{ id: string }[]>(res);
     expect(Array.isArray(list)).toBe(true);
-    expect(list.some((t: { id: string }) => t.id === taskId)).toBe(true);
+    expect(list.some((t) => t.id === taskId)).toBe(true);
   });
 
   test("GET /api/tasks?changeSetId=... filters correctly", async () => {
     const res = await fetch(`${BASE}/api/tasks?changeSetId=${csId}`);
     expect(res.status).toBe(200);
-    const list = await res.json();
-    expect(list.every((t: { change_set_id: string }) => t.change_set_id === csId)).toBe(true);
+    const list = await getJson<{ change_set_id: string }[]>(res);
+    expect(list.every((t) => t.change_set_id === csId)).toBe(true);
   });
 
   test("GET /api/tasks/:id returns the task", async () => {
     const res = await fetch(`${BASE}/api/tasks/${taskId}`);
     expect(res.status).toBe(200);
-    const task = await res.json();
+    const task = await getJson<{ id: string }>(res);
     expect(task.id).toBe(taskId);
   });
 });

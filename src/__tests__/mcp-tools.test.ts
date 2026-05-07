@@ -13,6 +13,8 @@ import { handleGetHandoffContext } from "../mcp-tools/get-handoff-context.js";
 import { TOTAL_TOKEN_BUDGET } from "../context/slots.js";
 import { resetRegistry } from "../roles/registry.js";
 import { existsSync } from "node:fs";
+import { createCheckRun, updateCheckRun } from "../domain/check-run.js";
+import { REQUIRED_CHECK_NAMES } from "../checks/check-config.js";
 
 const MIGRATIONS_DIR = resolve(process.cwd(), "migrations");
 const REPO_ROOT = resolve(process.cwd());
@@ -197,13 +199,25 @@ describe("request_changes MCP tool", () => {
 // approve_change_set
 // ---------------------------------------------------------------------------
 
+function seedPassedChecks(db: Database, changeSetId: string) {
+  for (const name of REQUIRED_CHECK_NAMES) {
+    const run = createCheckRun(db, changeSetId, name);
+    updateCheckRun(db, run.id, {
+      status: "passed",
+      exitCode: 0,
+      completedAt: new Date().toISOString(),
+    });
+  }
+}
+
 describe("approve_change_set MCP tool", () => {
-  test("transitions reviewing → approved", async () => {
+  test("transitions reviewing → approved when checks pass", async () => {
     const cs = newCs(db, "040");
     const fsm = new FSMEngine(db);
     fsm.transition(cs.id, "plan_accepted");
     fsm.transition(cs.id, "assign_implementer");
     fsm.transition(cs.id, "submit_for_review");
+    seedPassedChecks(db, cs.id);
 
     const result = await handleApproveChangeSet(
       { changeSetId: cs.id, summary: "LGTM" },
@@ -213,8 +227,27 @@ describe("approve_change_set MCP tool", () => {
     expect(data.status).toBe("approved");
   });
 
+  test("returns error when required checks have not passed", async () => {
+    const cs = newCs(db, "042");
+    const fsm = new FSMEngine(db);
+    fsm.transition(cs.id, "plan_accepted");
+    fsm.transition(cs.id, "assign_implementer");
+    fsm.transition(cs.id, "submit_for_review");
+    // Seed a failed check
+    const run = createCheckRun(db, cs.id, "typecheck");
+    updateCheckRun(db, run.id, { status: "failed", exitCode: 1, completedAt: new Date().toISOString() });
+
+    const result = await handleApproveChangeSet(
+      { changeSetId: cs.id, summary: "LGTM" },
+      db
+    );
+    const data = parse(result);
+    expect(data.error).toContain("required checks failed");
+    expect(result.isError).toBe(true);
+  });
+
   test("returns error for invalid transition (draft → approve)", async () => {
-    const cs = newCs(db, "041"); // draft
+    const cs = newCs(db, "041"); // draft, no checks seeded
     const result = await handleApproveChangeSet(
       { changeSetId: cs.id, summary: "LGTM" },
       db

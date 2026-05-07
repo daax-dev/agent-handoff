@@ -39,7 +39,7 @@ export const CreateTaskInputSchema = z.object({
   agent_role: z.string().optional(),
 });
 
-export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
+export type CreateTaskInput = z.input<typeof CreateTaskInputSchema>;
 
 // ---------------------------------------------------------------------------
 // ID generation

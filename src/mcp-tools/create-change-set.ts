@@ -10,16 +10,7 @@ interface Input {
   targetBranch?: string;
 }
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function mcpError(data: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-    isError: true,
-  };
-}
+import { mcpText, mcpError } from "./response.js";
 
 export async function handleCreateChangeSet(
   args: Input,

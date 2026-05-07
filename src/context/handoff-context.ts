@@ -143,7 +143,6 @@ export class HandoffContextBuilder {
     // --- role prompt with context injected ---
     const contextString = this.buildString({
       taskSpec, diff, acceptanceCriteria, blockingComments, architectureContext,
-      rolePrompt: "", tokenEstimate: 0, truncatedSlots,
     });
     const rolePrompt = roleConfig.promptContent.replace(
       "{{handoff_context}}",

@@ -70,7 +70,7 @@ export const CreateChangeSetInputSchema = z.object({
   worktree_path: z.string().min(1),
 });
 
-export type CreateChangeSetInput = z.infer<typeof CreateChangeSetInputSchema>;
+export type CreateChangeSetInput = z.input<typeof CreateChangeSetInputSchema>;
 
 // ---------------------------------------------------------------------------
 // ID generation (uses sequences table)

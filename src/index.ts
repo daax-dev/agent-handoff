@@ -18,6 +18,7 @@ import { handleAddReviewComment } from "./mcp-tools/add-review-comment.js";
 import { handleRequestChanges } from "./mcp-tools/request-changes.js";
 import { handleApproveChangeSet } from "./mcp-tools/approve-change-set.js";
 import { handleGetHandoffContext } from "./mcp-tools/get-handoff-context.js";
+import { handleLogDecision } from "./mcp-tools/log-decision.js";
 import { getDb } from "./db.js";
 
 const server = new McpServer({
@@ -227,6 +228,25 @@ server.tool(
   async (args) => {
     const db = getDb();
     return handleGetHandoffContext(args, db);
+  }
+);
+
+server.tool(
+  "log_decision",
+  "Record an architectural or implementation decision made during a task. Use this to document why a choice was made, what alternatives were considered, and any sources consulted.",
+  {
+    taskId: z.string().describe("Task ID (TSK_XXXXXX) this decision belongs to"),
+    changeSetId: z.string().describe("ChangeSet ID (chg_XXXXXX) this decision belongs to"),
+    topic: z.string().describe("Short topic / title for the decision (e.g. 'Database library choice')"),
+    optionsConsidered: z.array(z.string()).describe("List of options that were considered"),
+    choice: z.string().describe("The option that was chosen"),
+    rationale: z.string().describe("Why this option was chosen"),
+    sourcesCited: z.array(z.string()).optional().describe("URLs or document references supporting the decision"),
+    authorAgent: z.string().optional().describe("Name of the agent making the decision (omit for human entries)"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleLogDecision(args as Record<string, unknown>, db);
   }
 );
 

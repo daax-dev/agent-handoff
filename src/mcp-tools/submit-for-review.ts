@@ -2,14 +2,9 @@ import type { Database } from "bun:sqlite";
 import { FSMEngine } from "../fsm/engine.js";
 import { InvalidTransitionError } from "../fsm/errors.js";
 
-interface Input { changeSetId: string }
+import { mcpText, mcpError } from "./response.js";
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-function mcpError(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
-}
+interface Input { changeSetId: string }
 
 export async function handleSubmitForReview(args: Input, db: Database) {
   const fsm = new FSMEngine(db);

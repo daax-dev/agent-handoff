@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { randomUUID } from "node:crypto";
+import { createReviewComment, ReviewCommentSeveritySchema } from "../domain/review-comment.js";
+import { mcpText, mcpError } from "./response.js";
 
 interface Input {
   changeSetId: string;
@@ -11,13 +12,6 @@ interface Input {
   authorRole?: string;
 }
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-function mcpError(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
-}
-
 export async function handleAddReviewComment(args: Input, db: Database) {
   const cs = db
     .query<{ id: string }, [string]>("SELECT id FROM change_sets WHERE id = ?")
@@ -27,25 +21,20 @@ export async function handleAddReviewComment(args: Input, db: Database) {
     return mcpError({ error: `ChangeSet ${args.changeSetId} not found` });
   }
 
-  const id = `cmt_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  const now = new Date().toISOString();
+  const severityParsed = ReviewCommentSeveritySchema.safeParse(args.severity);
+  if (!severityParsed.success) {
+    return mcpError({ error: `Invalid severity: ${args.severity}` });
+  }
 
-  db.run(
-    `INSERT INTO review_comments
-       (id, change_set_id, author_agent, author_role, file_path, line_number, body, severity, resolved, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-    [
-      id,
-      args.changeSetId,
-      args.authorAgent ?? "unknown",
-      args.authorRole ?? "reviewer",
-      args.filePath ?? null,
-      args.lineNumber ?? null,
-      args.body,
-      args.severity,
-      now,
-    ]
-  );
+  const comment = createReviewComment(db, {
+    changeSetId: args.changeSetId,
+    body: args.body,
+    severity: severityParsed.data,
+    filePath: args.filePath,
+    lineNumber: args.lineNumber,
+    authorAgent: args.authorAgent,
+    authorRole: args.authorRole,
+  });
 
-  return mcpText({ commentId: id, severity: args.severity });
+  return mcpText({ commentId: comment.id, severity: comment.severity });
 }

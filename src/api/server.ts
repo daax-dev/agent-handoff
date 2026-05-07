@@ -3,6 +3,9 @@ import { SSEBroadcaster, broadcaster as defaultBroadcaster } from "./sse.js";
 import { changeSetRoutes } from "./routes/change-sets.js";
 import { taskRoutes } from "./routes/tasks.js";
 import { eventsRoute } from "./routes/events.js";
+import { reviewCommentRoutes } from "./routes/review-comments.js";
+import { checkRunRoutes } from "./routes/check-runs.js";
+import { decisionRoutes } from "./routes/decisions.js";
 import { json, notFound } from "./response.js";
 
 const ALLOWED_ORIGINS = ["http://localhost:5173", "http://localhost:4000", "http://127.0.0.1:5173"];
@@ -73,6 +76,24 @@ export function createApiServer(options: ServerOptions) {
         return taskResponse.then((r) => addCors(r, origin));
       }
       if (taskResponse) return addCors(taskResponse, origin);
+
+      // Review comment routes
+      const commentResponse = reviewCommentRoutes(db, path, req);
+      if (commentResponse instanceof Promise) {
+        return commentResponse.then((r) => addCors(r, origin));
+      }
+      if (commentResponse) return addCors(commentResponse, origin);
+
+      // Check run routes
+      const checkResponse = checkRunRoutes(db, path, req);
+      if (checkResponse) return addCors(checkResponse, origin);
+
+      // Decision routes
+      const decisionResponse = decisionRoutes(db, path, req);
+      if (decisionResponse instanceof Promise) {
+        return decisionResponse.then((r) => addCors(r, origin));
+      }
+      if (decisionResponse) return addCors(decisionResponse, origin);
 
       return addCors(notFound(), origin);
     },

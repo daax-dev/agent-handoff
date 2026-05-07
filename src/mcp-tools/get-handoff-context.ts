@@ -2,14 +2,9 @@ import type { Database } from "bun:sqlite";
 import { HandoffContextBuilder } from "../context/handoff-context.js";
 import { AgentRoleRegistry } from "../roles/registry.js";
 
-interface Input { changeSetId: string; role: string }
+import { mcpText, mcpError } from "./response.js";
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-function mcpError(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
-}
+interface Input { changeSetId: string; role: string }
 
 export async function handleGetHandoffContext(
   args: Input,

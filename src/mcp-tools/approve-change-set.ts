@@ -1,19 +1,23 @@
 import type { Database } from "bun:sqlite";
 import { FSMEngine } from "../fsm/engine.js";
 import { InvalidTransitionError } from "../fsm/errors.js";
+import { allRequiredPassed } from "../domain/check-run.js";
+import { REQUIRED_CHECK_NAMES } from "../checks/check-config.js";
+
+import { mcpText, mcpError } from "./response.js";
 
 interface Input { changeSetId: string; summary: string }
 
-function mcpText(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-function mcpError(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], isError: true };
-}
-
 export async function handleApproveChangeSet(args: Input, db: Database) {
-  // MVP-3: no HITL gate yet (PRD-006 is MVP-6).
-  // HITL_ENABLED=true will be wired up in MVP-6.
+  // Guard: all required checks must have passed
+  if (!allRequiredPassed(db, args.changeSetId, REQUIRED_CHECK_NAMES)) {
+    return mcpError({
+      error: "required checks failed: all required checks must pass before approval",
+      changeSetId: args.changeSetId,
+    });
+  }
+
+  // MVP-3/4: no HITL gate yet (PRD-006 is MVP-6).
   const fsm = new FSMEngine(db);
   try {
     const newStatus = fsm.transition(args.changeSetId, "approve", {
