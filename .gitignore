@@ -2,6 +2,9 @@
 dist/
 node_modules/
 
+# Runtime artifacts (worktrees, task specs, agent logs, SQLite DB)
+.work/
+
 # Logs
 .logs/
 
