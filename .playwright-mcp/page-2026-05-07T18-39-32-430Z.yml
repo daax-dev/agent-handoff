@@ -1,0 +1,175 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [active] [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to light mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e29]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: FSM Workflow
+          - generic [ref=e44]:
+            - generic [ref=e45]: agent transition
+            - generic [ref=e47]: HUMAN required
+            - generic [ref=e49]: circuit breaker
+        - generic [ref=e51]:
+          - button "Add State" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+            - text: Add State
+          - button "Reset layout" [ref=e54] [cursor=pointer]:
+            - img [ref=e55]
+            - text: Reset layout
+          - button "Save" [disabled] [ref=e58]:
+            - img [ref=e59]
+            - text: Save
+      - application [ref=e65]:
+        - generic [ref=e67]:
+          - generic:
+            - generic:
+              - img
+              - img:
+                - group "Edge from draft to planned" [ref=e68] [cursor=pointer]
+              - img:
+                - group "Edge from planned to implementing" [ref=e74] [cursor=pointer]
+              - img:
+                - group "Edge from implementing to reviewing" [ref=e80] [cursor=pointer]
+              - img:
+                - group "Edge from reviewing to changes_requested" [ref=e86] [cursor=pointer]
+              - img:
+                - group "Edge from reviewing to approved" [ref=e92] [cursor=pointer]
+              - img:
+                - group "Edge from changes_requested to implementing" [ref=e98] [cursor=pointer]
+              - img:
+                - group "Edge from approved to conflict_detected" [ref=e104] [cursor=pointer]
+              - img:
+                - group "Edge from approved to merged" [ref=e110] [cursor=pointer]
+              - img:
+                - group "Edge from conflict_detected to implementing" [ref=e116] [cursor=pointer]
+              - img:
+                - group "Edge from conflict_detected to reviewing" [ref=e122] [cursor=pointer]
+              - img:
+                - group "Edge from reviewing to escalated" [ref=e128] [cursor=pointer]
+            - generic:
+              - generic [ref=e134] [cursor=pointer]: plan_accepted
+              - generic [ref=e135] [cursor=pointer]: assign_implementer
+              - generic [ref=e136] [cursor=pointer]: submit_for_review
+              - generic [ref=e137] [cursor=pointer]: request_changes
+              - generic [ref=e138] [cursor=pointer]:
+                - generic [ref=e139]: HUMAN
+                - text: approve
+              - generic [ref=e140] [cursor=pointer]: pick_up_revision
+              - generic [ref=e141] [cursor=pointer]: merge_conflict_detected
+              - generic [ref=e142] [cursor=pointer]:
+                - generic [ref=e143]: HUMAN
+                - text: merge
+              - generic [ref=e144] [cursor=pointer]: conflict_reopen
+              - generic [ref=e145] [cursor=pointer]: conflict_resolved
+              - generic [ref=e146] [cursor=pointer]: circuit_breaker (3× request_changes)
+            - generic:
+              - group [ref=e147]:
+                - generic [ref=e148]:
+                  - generic [ref=e153]:
+                    - img [ref=e155]
+                    - generic [ref=e157]: draft
+                  - generic [ref=e158]:
+                    - img [ref=e159]
+                    - text: no agent — will stall here
+              - group [ref=e161]:
+                - generic [ref=e162]:
+                  - generic [ref=e167]:
+                    - img [ref=e169]
+                    - generic [ref=e171]: planned
+                  - generic [ref=e173]:
+                    - generic [ref=e174]: planner
+                    - generic [ref=e175]: claude-code
+              - group [ref=e176]:
+                - generic [ref=e177]:
+                  - generic [ref=e182]:
+                    - img [ref=e184]
+                    - generic [ref=e186]: implementing
+                  - generic [ref=e188]:
+                    - generic [ref=e189]: implementer
+                    - generic [ref=e190]: claude-code
+              - group [ref=e191]:
+                - generic [ref=e192]:
+                  - generic [ref=e197]:
+                    - img [ref=e199]
+                    - generic [ref=e201]: reviewing
+                  - generic [ref=e202]:
+                    - generic [ref=e203]:
+                      - generic [ref=e204]: reviewer
+                      - generic [ref=e205]: copilot-cli
+                    - generic [ref=e206]:
+                      - generic [ref=e207]: security_reviewer
+                      - generic [ref=e208]: codex
+              - group [ref=e209]:
+                - generic [ref=e210]:
+                  - generic [ref=e215]:
+                    - img [ref=e217]
+                    - generic [ref=e219]: changes_requested
+                  - generic [ref=e221]:
+                    - generic [ref=e222]: fixer
+                    - generic [ref=e223]: claude-code
+              - group [ref=e224]:
+                - generic [ref=e225]:
+                  - generic [ref=e230]:
+                    - img [ref=e232]
+                    - generic [ref=e234]: approved
+                  - generic [ref=e235]:
+                    - img [ref=e236]
+                    - text: no agent — will stall here
+              - group [ref=e238]:
+                - generic [ref=e239]:
+                  - generic [ref=e244]:
+                    - img [ref=e246]
+                    - generic [ref=e248]: conflict_detected
+                  - generic [ref=e249]:
+                    - img [ref=e250]
+                    - text: no agent — will stall here
+              - group [ref=e252]:
+                - generic [ref=e253]:
+                  - generic [ref=e258]:
+                    - img [ref=e260]
+                    - generic [ref=e264]: merged
+                    - generic [ref=e265]: TERMINAL
+                  - generic [ref=e267]:
+                    - generic [ref=e268]: summarizer
+                    - generic [ref=e269]: claude-code
+              - group [ref=e270]:
+                - generic [ref=e271]:
+                  - generic [ref=e276]:
+                    - img [ref=e278]
+                    - generic [ref=e282]: abandoned
+                    - generic [ref=e283]: TERMINAL
+                  - generic [ref=e284]: ← abandon from any active state
+              - group [ref=e285]:
+                - generic [ref=e291]:
+                  - img [ref=e293]
+                  - generic [ref=e295]: escalated
+                  - generic [ref=e296]: TERMINAL
+        - img
+        - generic "Control Panel" [ref=e297]:
+          - button "Zoom In" [ref=e298] [cursor=pointer]:
+            - img [ref=e299]
+          - button "Zoom Out" [ref=e301] [cursor=pointer]:
+            - img [ref=e302]
+          - button "Fit View" [ref=e304] [cursor=pointer]:
+            - img [ref=e305]
+          - button "Toggle Interactivity" [ref=e307] [cursor=pointer]:
+            - img [ref=e308]
+        - img "Mini Map" [ref=e311]
+        - link "React Flow attribution" [ref=e323] [cursor=pointer]:
+          - /url: https://reactflow.dev
+          - text: React Flow

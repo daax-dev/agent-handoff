@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import yaml from "js-yaml";
 import { TRANSITIONS } from "../../fsm/states.js";
+import { loadWorkflowConfig } from "../../fsm/workflow-config.js";
 import { json } from "../response.js";
 
 interface RoleEntry {
@@ -34,10 +35,11 @@ export interface FSMMeta {
 export function fsmMetaRoute(path: string, req: Request): Response | null {
   if (req.method === "GET" && path === "/api/fsm/meta") {
     const roles = loadRoles();
+    const workflowConfig = loadWorkflowConfig();
     const meta: FSMMeta = {
       transitions: TRANSITIONS,
       roles,
-      hitlGatedTriggers: ["approve", "merge"],
+      hitlGatedTriggers: workflowConfig.hitlGatedTriggers,
       circuitBreakerThreshold: 3,
     };
     return json(meta);

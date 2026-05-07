@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to light mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e29]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - heading "Board" [level=1] [ref=e33]
+          - paragraph [ref=e34]: 0 change sets
+        - button "All columns" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - text: All columns
+      - generic [ref=e37]:
+        - paragraph [ref=e38]: No ChangeSets yet.
+        - paragraph [ref=e39]: POST /api/change-sets

@@ -1,424 +1,853 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  Handle,
-  Position,
   BackgroundVariant,
-  applyNodeChanges,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  reconnectEdge,
+  ConnectionMode,
+  MarkerType,
   type Node,
   type Edge,
-  type NodeProps,
+  type Connection,
+  type OnConnect,
+  type OnReconnect,
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useTheme } from "@/components/ThemeProvider";
+import { Save, RotateCcw, Plus, Sun, Moon } from "lucide-react";
 import { useAgentAssignments } from "@/hooks/useAgentAssignments";
-import { useFSMMeta } from "@/hooks/useFSMMeta";
-import { TOOL_LABELS } from "@/types";
+import {
+  useWorkflowConfig,
+  useSaveWorkflowConfig,
+  type WorkflowConfig,
+  type StateCategory,
+} from "@/hooks/useWorkflowConfig";
+import { fsmNodeTypes, type FSMNodeData } from "@/components/workflow-editor/FSMNode";
+import { fsmEdgeTypes, type FSMEdgeData } from "@/components/workflow-editor/FSMEdge";
+import { TransitionPanel } from "@/components/workflow-editor/TransitionPanel";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
-// ── State metadata ──────────────────────────────────────────────────────────
+// ── State catalogue ───────────────────────────────────────────────────────────
 
-type StateCategory = "active" | "success" | "fail" | "escalated";
-
-const STATE_META: Record<string, { label: string; category: StateCategory }> = {
-  draft:             { label: "draft",             category: "active" },
-  planned:           { label: "planned",           category: "active" },
-  implementing:      { label: "implementing",      category: "active" },
-  reviewing:         { label: "reviewing",         category: "active" },
-  changes_requested: { label: "changes_requested", category: "active" },
-  approved:          { label: "approved",          category: "active" },
-  conflict_detected: { label: "conflict_detected", category: "active" },
-  merged:            { label: "merged",            category: "success" },
-  abandoned:         { label: "abandoned",         category: "fail" },
-  escalated:         { label: "escalated",         category: "escalated" },
+const STATE_META: Record<string, { category: StateCategory }> = {
+  draft:             { category: "active"    },
+  planned:           { category: "active"    },
+  implementing:      { category: "active"    },
+  reviewing:         { category: "active"    },
+  changes_requested: { category: "active"    },
+  approved:          { category: "active"    },
+  conflict_detected: { category: "active"    },
+  merged:            { category: "success"   },
+  abandoned:         { category: "fail"      },
+  escalated:         { category: "escalated" },
 };
 
-// Default positions — wider spacing so edge labels have room to breathe.
-// Gap between adjacent main-row nodes: ~130px (position delta 360, node width ~230).
 const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
-  // Main lifecycle (left → right)
-  draft:             { x: 0,    y: 200 },
-  planned:           { x: 360,  y: 200 },
-  implementing:      { x: 720,  y: 200 },
-  reviewing:         { x: 1100, y: 200 },
-  approved:          { x: 1460, y: 200 },
-  merged:            { x: 1820, y: 80  },
-  // Cycle states (below main row)
-  changes_requested: { x: 920,  y: 490 },
-  conflict_detected: { x: 1460, y: 490 },
-  // Terminal states (bottom)
-  abandoned:         { x: 720,  y: 750 },
-  escalated:         { x: 1100, y: 750 },
+  draft:             { x: 0,    y: 150 },
+  planned:           { x: 310,  y: 150 },
+  implementing:      { x: 620,  y: 150 },
+  reviewing:         { x: 940,  y: 150 },
+  approved:          { x: 1260, y: 150 },
+  merged:            { x: 1580, y: 50  },
+  abandoned:         { x: 0,    y: 430 },
+  changes_requested: { x: 620,  y: 450 },
+  escalated:         { x: 940,  y: 540 },
+  conflict_detected: { x: 1260, y: 450 },
 };
 
-const POSITIONS_KEY = "fsm-diagram-positions";
+const CIRCUIT_BREAKER_THRESHOLD = 3;
 
-function loadSavedPositions(): Record<string, { x: number; y: number }> {
-  try {
-    const raw = localStorage.getItem(POSITIONS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
+// ── Edge builder helpers ──────────────────────────────────────────────────────
+
+function handles(from: string, to: string): { sourceHandle?: string; targetHandle?: string } {
+  if (
+    (from === "reviewing" && (to === "changes_requested" || to === "escalated")) ||
+    (from === "approved"  && to === "conflict_detected")
+  ) {
+    return { sourceHandle: "bottom" };
   }
+  if (
+    (from === "changes_requested" && to === "implementing") ||
+    (from === "conflict_detected" && (to === "implementing" || to === "reviewing"))
+  ) {
+    return { targetHandle: "bottom" };
+  }
+  return {};
 }
 
-// ── Style helpers ───────────────────────────────────────────────────────────
+function buildEdges(
+  config: WorkflowConfig,
+  selectedId: string | null
+): Edge<FSMEdgeData>[] {
+  const hitl   = new Set(config.hitlGatedTriggers);
+  const result: Edge<FSMEdgeData>[] = [];
 
-const CATEGORY_STYLES: Record<
-  StateCategory,
-  { border: string; headerColor: string; badge?: string }
-> = {
-  active:    { border: "hsl(var(--border))",                     headerColor: "hsl(var(--card-foreground))" },
-  success:   { border: "hsl(var(--status-merged))",              headerColor: "hsl(var(--status-merged))",              badge: "TERMINAL" },
-  fail:      { border: "hsl(var(--status-abandoned))",           headerColor: "hsl(var(--status-abandoned))",           badge: "TERMINAL" },
-  escalated: { border: "hsl(var(--status-changes-requested))",   headerColor: "hsl(var(--status-changes-requested))",   badge: "TERMINAL" },
-};
+  for (const t of config.transitions) {
+    if (t.trigger === "abandon") continue;
+    const isHitl = hitl.has(t.trigger);
+    const color  = isHitl ? "#2563eb" : "#d97706";
+    const h      = handles(t.from, t.to);
 
-function shortModel(model: string): string {
-  return model.replace(/^claude-/, "");
+    result.push({
+      id: `${t.from}--${t.trigger}--${t.to}`,
+      source: t.from,
+      target: t.to,
+      ...h,
+      type: "fsmEdge",
+      markerEnd: { type: MarkerType.ArrowClosed, color },
+      data: { trigger: t.trigger, isHitl, isCircuitBreaker: false } as FSMEdgeData,
+      selected: `${t.from}--${t.trigger}--${t.to}` === selectedId,
+    });
+  }
+
+  result.push({
+    id: "cb-reviewing-escalated",
+    source: "reviewing",
+    target: "escalated",
+    sourceHandle: "bottom",
+    type: "fsmEdge",
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#b91c1c" },
+    data: {
+      trigger: `circuit_breaker (${CIRCUIT_BREAKER_THRESHOLD}× request_changes)`,
+      isHitl: false,
+      isCircuitBreaker: true,
+    } as FSMEdgeData,
+    selected: "cb-reviewing-escalated" === selectedId,
+  });
+
+  return result;
 }
 
-// ── Custom node ─────────────────────────────────────────────────────────────
+// ── Public export — wraps with ThemeProvider ──────────────────────────────────
 
-interface FSMNodeData extends Record<string, unknown> {
-  state: string;
-  category: StateCategory;
-  assignments: Array<{ role: string; tool: string; model: string }>;
-  isTerminal: boolean;
-  abandonNote?: boolean;
-  noAgent?: boolean; // active state with zero enabled assignments
-}
-
-function FSMNode({ data }: NodeProps) {
-  const d = data as FSMNodeData;
-  const styles = CATEGORY_STYLES[d.category];
-  const borderColor = d.noAgent
-    ? "hsl(var(--status-reviewing))"   // amber — warning
-    : styles.border;
-
-  const hasContent = d.assignments.length > 0 || d.abandonNote || d.noAgent;
-
+export function FlowDiagram() {
   return (
-    <div
-      style={{
-        background: "hsl(var(--card))",
-        border: `2px solid ${borderColor}`,
-        borderRadius: 8,
-        minWidth: 200,
-        maxWidth: 260,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
-        fontSize: 12,
-        color: "hsl(var(--card-foreground))",
-      }}
-    >
-      {/* Invisible handles — source/target/top/bottom for flexible routing */}
-      <Handle type="target" position={Position.Left}   style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Right}  style={{ opacity: 0 }} />
-      <Handle type="target" position={Position.Top}    style={{ opacity: 0 }} id="top" />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} id="bottom" />
-
-      {/* Header row */}
-      <div
-        style={{
-          padding: "8px 10px 6px",
-          borderBottom: hasContent ? "1px solid hsl(var(--border))" : undefined,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 6,
-        }}
-      >
-        <span style={{ fontWeight: 700, color: styles.headerColor, fontFamily: "monospace", fontSize: 11 }}>
-          {d.state}
-        </span>
-        {styles.badge && (
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 600,
-              color: styles.headerColor,
-              border: `1px solid ${styles.border}`,
-              borderRadius: 4,
-              padding: "1px 4px",
-              opacity: 0.8,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {styles.badge}
-          </span>
-        )}
-      </div>
-
-      {/* Agent assignments */}
-      {d.assignments.length > 0 && (
-        <div style={{ padding: "6px 10px 8px" }}>
-          {d.assignments.map((a) => (
-            <div key={a.role} style={{ marginBottom: 5 }}>
-              <div style={{ fontWeight: 600, color: "hsl(var(--foreground))", marginBottom: 1 }}>
-                {a.role}
-              </div>
-              <div style={{ color: "hsl(var(--muted-foreground))", paddingLeft: 8, lineHeight: 1.5 }}>
-                {TOOL_LABELS[a.tool as keyof typeof TOOL_LABELS] ?? a.tool}
-                {a.model && (
-                  <span style={{ opacity: 0.75 }}> · {shortModel(a.model)}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* No-agent warning (active state only) */}
-      {d.noAgent && (
-        <div style={{ padding: "5px 10px 8px", color: "hsl(var(--status-reviewing))", fontSize: 11 }}>
-          ⚠ no agent — will stall here
-        </div>
-      )}
-
-      {/* Abandon note */}
-      {d.abandonNote && (
-        <div style={{ padding: "5px 10px 8px", color: "hsl(var(--muted-foreground))", fontStyle: "italic", fontSize: 10 }}>
-          ← abandon from any active state
-        </div>
-      )}
-    </div>
+    <ThemeProvider>
+      <FlowDiagramInner />
+    </ThemeProvider>
   );
 }
 
-const NODE_TYPES = { fsmNode: FSMNode };
+// ── Inner component ───────────────────────────────────────────────────────────
 
-// ── Main component ──────────────────────────────────────────────────────────
+function FlowDiagramInner() {
+  const { palette: p, isDark, toggleTheme } = useTheme();
+  const { data: assignments = [] }          = useAgentAssignments();
+  const { data: serverConfig, isLoading, isError } = useWorkflowConfig();
+  const saveWorkflow = useSaveWorkflowConfig();
 
-export function FlowDiagram() {
-  const { theme } = useTheme();
-  const { data: assignments = [] } = useAgentAssignments();
-  const { data: meta, isLoading, isError } = useFSMMeta();
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FSMNodeData>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<FSMEdgeData>>([]);
+  const [localConfig, setLocalConfig]    = useState<WorkflowConfig | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [isDirty, setIsDirty]           = useState(false);
+  const [saveError, setSaveError]       = useState<string | null>(null);
+  const [showAddState, setShowAddState] = useState(false);
 
-  // Controlled node state — required for drag persistence
-  const [displayNodes, setDisplayNodes] = useState<Node[]>([]);
+  // Sync server config → local on first load (or server refresh)
+  useEffect(() => {
+    if (serverConfig && !isDirty) setLocalConfig(serverConfig);
+  }, [serverConfig, isDirty]);
 
   // Group enabled assignments by fsm_state
   const assignmentsByState = useMemo(() => {
-    const map: Record<string, Array<{ role: string; tool: string }>> = {};
+    const map: Record<string, Array<{ role: string; tool: string; model: string }>> = {};
     for (const a of assignments) {
       if (!a.enabled) continue;
-      (map[a.fsm_state] ??= []).push({ role: a.role, tool: a.tool });
+      (map[a.fsm_state] ??= []).push({ role: a.role, tool: a.tool, model: "" });
     }
     return map;
   }, [assignments]);
 
-  // Compute base nodes from API data
-  const baseNodes: Node[] = useMemo(() => {
-    if (!meta || !Array.isArray(meta.transitions) || typeof meta.roles !== "object") return [];
-
-    return Object.entries(STATE_META).map(([state, { category }]) => {
-      const stateAssignments = (assignmentsByState[state] ?? []).map((a) => ({
-        role: a.role,
-        tool: a.tool,
-        model: meta.roles[a.role]?.model ?? "",
-      }));
-
-      const noAgent = category === "active" && stateAssignments.length === 0;
-
-      const nodeData: FSMNodeData = {
-        state,
-        category,
-        assignments: stateAssignments,
-        isTerminal: category !== "active",
-        abandonNote: state === "abandoned",
-        noAgent,
-      };
-
-      return {
-        id: state,
-        type: "fsmNode",
-        position: DEFAULT_POSITIONS[state] ?? { x: 0, y: 0 },
-        data: nodeData,
-      } satisfies Node;
-    });
-  }, [meta, assignmentsByState]);
-
-  // When base nodes change (API load or assignment change), merge with saved positions
+  // Build nodes whenever config or assignments change
   useEffect(() => {
-    if (baseNodes.length === 0) return;
-    const saved = loadSavedPositions();
-    setDisplayNodes(
-      baseNodes.map((n) => ({
-        ...n,
-        position: saved[n.id] ?? n.position,
-      }))
-    );
-  }, [baseNodes]);
+    if (!localConfig) return;
+    const saved        = localConfig.layout ?? {};
+    const customStates = localConfig.states ?? {};
 
-  // Handle drag — apply changes and persist positions when drag ends
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    setDisplayNodes((prev) => {
-      const next = applyNodeChanges(changes, prev);
-      const dragEnded = changes.some(
-        (c) => c.type === "position" && !c.dragging
-      );
-      if (dragEnded) {
-        const positions: Record<string, { x: number; y: number }> = {};
-        for (const n of next) positions[n.id] = n.position;
-        try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions)); } catch {}
+    const allStates: Record<string, { category: StateCategory }> = {
+      ...STATE_META,
+      ...Object.fromEntries(
+        Object.entries(customStates).map(([s, v]) => [s, { category: v.category as StateCategory }])
+      ),
+    };
+
+    const newNodes: Node<FSMNodeData>[] = Object.entries(allStates).map(
+      ([state, { category }]) => {
+        const stateAssignments = assignmentsByState[state] ?? [];
+        const noAgent = category === "active" && stateAssignments.length === 0;
+        return {
+          id: state,
+          type: "fsmStateNode",
+          position: saved[state] ?? DEFAULT_POSITIONS[state] ?? { x: 0, y: 0 },
+          data: {
+            state,
+            category,
+            assignments: stateAssignments,
+            isTerminal: category !== "active",
+            noAgent,
+            abandonNote: state === "abandoned",
+          } as FSMNodeData,
+        };
       }
-      return next;
-    });
-  }, []);
+    );
+    setNodes(newNodes);
+  }, [localConfig, assignmentsByState, setNodes]);
 
-  function resetLayout() {
-    try { localStorage.removeItem(POSITIONS_KEY); } catch {}
-    setDisplayNodes(baseNodes);
-  }
+  // Build edges whenever config or selection changes
+  useEffect(() => {
+    if (!localConfig) return;
+    setEdges(buildEdges(localConfig, selectedEdgeId));
+  }, [localConfig, selectedEdgeId, setEdges]);
 
-  // Edges
-  const edges: Edge[] = useMemo(() => {
-    if (!meta || !Array.isArray(meta.transitions) || typeof meta.roles !== "object") return [];
+  // ── Node drag → save layout ───────────────────────────────────────────────
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<Node<FSMNodeData>>[]) => {
+      onNodesChange(changes);
+      const dragEnded = changes.some(
+        (c) => c.type === "position" && !c.dragging && c.position
+      );
+      if (dragEnded && localConfig) {
+        const updatedLayout = { ...localConfig.layout };
+        for (const c of changes) {
+          if (c.type === "position" && !c.dragging && c.position) {
+            updatedLayout[c.id] = c.position;
+          }
+        }
+        setLocalConfig({ ...localConfig, layout: updatedLayout });
+        setIsDirty(true);
+      }
+    },
+    [onNodesChange, localConfig]
+  );
 
-    const hitlGated = new Set(meta.hitlGatedTriggers);
-    const result: Edge[] = [];
+  // ── Edge reconnect → update transition ────────────────────────────────────
+  const onReconnect: OnReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds) as Edge<FSMEdgeData>[]);
+      if (!localConfig) return;
+      const parts = oldEdge.id.split("--");
+      if (parts.length !== 3) return;
+      const [from, trigger, to] = parts;
+      const updated = {
+        ...localConfig,
+        transitions: localConfig.transitions.map((t) =>
+          t.from === from && t.trigger === trigger && t.to === to
+            ? { from: newConnection.source!, trigger, to: newConnection.target! }
+            : t
+        ),
+      };
+      const newId = `${newConnection.source}--${trigger}--${newConnection.target}`;
+      setEdges((eds) =>
+        eds.map((e) => (e.id === oldEdge.id ? { ...e, id: newId } : e))
+      );
+      setLocalConfig(updated);
+      setIsDirty(true);
+      if (selectedEdgeId === oldEdge.id) setSelectedEdgeId(newId);
+    },
+    [setEdges, localConfig, selectedEdgeId]
+  );
 
-    const coreTransitions = meta.transitions.filter((t) => t.trigger !== "abandon");
+  // ── New connection → add transition ───────────────────────────────────────
+  const onConnect: OnConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      const trigger = "new_trigger";
+      const newId   = `${connection.source}--${trigger}--${connection.target}`;
+      const newEdge: Edge<FSMEdgeData> = {
+        id: newId,
+        source: connection.source,
+        target: connection.target,
+        type: "fsmEdge",
+        markerEnd: { type: MarkerType.ArrowClosed, color: p.amber },
+        data: { trigger, isHitl: false, isCircuitBreaker: false },
+      };
+      setEdges((eds) => addEdge(newEdge, eds) as Edge<FSMEdgeData>[]);
+      if (localConfig) {
+        setLocalConfig({
+          ...localConfig,
+          transitions: [
+            ...localConfig.transitions,
+            { from: connection.source, to: connection.target, trigger },
+          ],
+        });
+        setIsDirty(true);
+      }
+      setSelectedEdgeId(newId);
+    },
+    [setEdges, localConfig, p.amber]
+  );
 
-    for (const t of coreTransitions) {
-      const isHitl = hitlGated.has(t.trigger);
+  // ── Panel callbacks ────────────────────────────────────────────────────────
+  const handleTransitionUpdate = useCallback(
+    (edgeId: string, updates: { trigger?: string; isHitl?: boolean }) => {
+      if (!localConfig) return;
+      const parts = edgeId.split("--");
+      if (parts.length !== 3) return;
+      const [from, oldTrigger, to] = parts;
+      const newTrigger = updates.trigger ?? oldTrigger;
 
-      const usesBottomSource =
-        (t.from === "reviewing" && t.to === "changes_requested") ||
-        (t.from === "approved"  && t.to === "conflict_detected");
-      const usesTopTarget =
-        (t.from === "changes_requested" && t.to === "implementing") ||
-        (t.from === "conflict_detected" && t.to === "implementing") ||
-        (t.from === "conflict_detected" && t.to === "reviewing");
+      let updated = { ...localConfig };
 
-      result.push({
-        id: `${t.from}-${t.to}-${t.trigger}`,
-        source: t.from,
-        target: t.to,
-        sourceHandle: usesBottomSource ? "bottom" : undefined,
-        targetHandle: usesTopTarget ? "top" : undefined,
-        label: isHitl ? `🔒 ${t.trigger}` : t.trigger,
-        labelStyle: { fontSize: 10, fontFamily: "monospace" },
-        labelBgStyle: { fill: "hsl(var(--card))", fillOpacity: 0.9 },
-        style: isHitl
-          ? { stroke: "hsl(var(--status-hitl))", strokeWidth: 1.5 }
-          : { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
-        animated: !["merged", "abandoned", "escalated"].includes(t.to),
-        markerEnd: { type: "arrowclosed" as const },
-        type: "smoothstep",
+      if (updates.trigger && updates.trigger !== oldTrigger) {
+        updated = {
+          ...updated,
+          transitions: updated.transitions.map((t) =>
+            t.from === from && t.trigger === oldTrigger && t.to === to
+              ? { ...t, trigger: newTrigger }
+              : t
+          ),
+          hitlGatedTriggers: updated.hitlGatedTriggers.map((ht) =>
+            ht === oldTrigger ? newTrigger : ht
+          ),
+        };
+      }
+
+      if (updates.isHitl !== undefined) {
+        const already = updated.hitlGatedTriggers.includes(newTrigger);
+        updated = {
+          ...updated,
+          hitlGatedTriggers: updates.isHitl
+            ? already ? updated.hitlGatedTriggers : [...updated.hitlGatedTriggers, newTrigger]
+            : updated.hitlGatedTriggers.filter((t) => t !== newTrigger),
+        };
+      }
+
+      setLocalConfig(updated);
+      setIsDirty(true);
+      if (updates.trigger && updates.trigger !== oldTrigger) {
+        setSelectedEdgeId(`${from}--${newTrigger}--${to}`);
+      }
+    },
+    [localConfig]
+  );
+
+  const handleTransitionDelete = useCallback(
+    (edgeId: string) => {
+      if (!localConfig) return;
+      const parts = edgeId.split("--");
+      if (parts.length !== 3) return;
+      const [from, trigger, to] = parts;
+      setLocalConfig({
+        ...localConfig,
+        transitions: localConfig.transitions.filter(
+          (t) => !(t.from === from && t.trigger === trigger && t.to === to)
+        ),
       });
+      setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+      setIsDirty(true);
+      setSelectedEdgeId(null);
+    },
+    [localConfig, setEdges]
+  );
+
+  // ── Add new state node ────────────────────────────────────────────────────
+  const existingStates = useMemo(
+    () => new Set([
+      ...Object.keys(STATE_META),
+      ...Object.keys(localConfig?.states ?? {}),
+      ...(localConfig?.transitions.flatMap((t) => [t.from, t.to]) ?? []),
+    ]),
+    [localConfig]
+  );
+
+  const commitAddState = useCallback(
+    (name: string, category: StateCategory) => {
+      if (!localConfig) return;
+      const customCount = Object.keys(localConfig.states ?? {}).length;
+      const x = 200 + (customCount % 4) * 260;
+      const y = 700 + Math.floor(customCount / 4) * 140;
+      setLocalConfig({
+        ...localConfig,
+        layout: { ...localConfig.layout, [name]: { x, y } },
+        states: { ...(localConfig.states ?? {}), [name]: { category } },
+      });
+      setIsDirty(true);
+      setShowAddState(false);
+    },
+    [localConfig]
+  );
+
+  // ── Save & Reset ──────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!localConfig) return;
+    setSaveError(null);
+    try {
+      await saveWorkflow.mutateAsync(localConfig);
+      setIsDirty(false);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Save failed");
     }
+  }, [localConfig, saveWorkflow]);
 
-    // Circuit-breaker pseudo-edge
-    result.push({
-      id: "cb-reviewing-escalated",
-      source: "reviewing",
-      target: "escalated",
-      sourceHandle: "bottom",
-      targetHandle: "top",
-      label: `circuit_breaker (${meta.circuitBreakerThreshold}× request_changes)`,
-      labelStyle: { fontSize: 10 },
-      labelBgStyle: { fill: "hsl(var(--card))", fillOpacity: 0.9 },
-      style: {
-        stroke: "hsl(var(--status-changes-requested))",
-        strokeDasharray: "5 3",
-        strokeWidth: 1.5,
-      },
-      animated: false,
-    });
+  const handleResetLayout = useCallback(() => {
+    if (!localConfig) return;
+    // Only reset built-in states; preserve custom state positions
+    const customLayout: Record<string, { x: number; y: number }> = {};
+    for (const [id, pos] of Object.entries(localConfig.layout)) {
+      if (!(id in STATE_META)) customLayout[id] = pos;
+    }
+    setLocalConfig({ ...localConfig, layout: customLayout });
+    setIsDirty(true);
+  }, [localConfig]);
 
-    return result;
-  }, [meta]);
+  // ── Selected edge for panel ───────────────────────────────────────────────
+  const selectedEdge = useMemo(
+    () => (selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) ?? null : null),
+    [selectedEdgeId, edges]
+  );
 
+  // ── Loading / error states ────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        Loading FSM…
+      <div style={{ height: "calc(100vh - 48px)", display: "flex", alignItems: "center", justifyContent: "center", background: p.canvasBg, color: p.textMuted, fontSize: 13 }}>
+        Loading workflow…
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-destructive">
-        Failed to load FSM metadata.
+      <div style={{ height: "calc(100vh - 48px)", display: "flex", alignItems: "center", justifyContent: "center", background: p.canvasBg, color: p.textRed, fontSize: 13 }}>
+        Failed to load workflow config.
       </div>
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 48px)" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
-        <div>
-          <h1 className="text-base font-semibold">FSM Flow</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Drag nodes to rearrange · positions are saved per browser
-          </p>
-        </div>
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 24,
-                  borderTop: "1.5px dashed hsl(var(--status-changes-requested))",
-                }}
-              />
-              circuit breaker
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span style={{ color: "hsl(var(--status-hitl))" }}>🔒</span>
-              HITL gated
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span style={{ color: "hsl(var(--status-reviewing))" }}>⚠</span>
-              no agent (will stall)
-            </span>
+    <div style={{ height: "calc(100vh - 48px)", display: "flex", flexDirection: "column", background: p.canvasBg }}>
+
+      {/* ── Header bar ──────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 18px",
+          height: 48,
+          background: p.headerBg,
+          borderBottom: `1px solid ${p.headerBorder}`,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <span style={{ fontWeight: 700, color: p.text, fontSize: 13 }}>
+            FSM Workflow
+          </span>
+
+          {/* Legend */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 11, color: p.textMuted }}>
+            <LegendItem color={p.amber}   label="agent transition" />
+            <LegendItem color={p.blue}    label="HUMAN required"   solid />
+            <LegendItem color="#b91c1c"   label="circuit breaker"  dashed />
           </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {saveError && (
+            <span style={{ fontSize: 11, color: p.textRed }}>{saveError}</span>
+          )}
+
+          {/* Theme toggle */}
           <button
-            onClick={resetLayout}
-            className="text-xs text-muted-foreground hover:text-foreground border border-border rounded px-2 py-1 transition-colors"
+            onClick={toggleTheme}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 30,
+              height: 30,
+              background: "none",
+              border: `1px solid ${p.headerBorder}`,
+              borderRadius: 6,
+              color: p.textMuted,
+              cursor: "pointer",
+              transition: "border-color 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = p.amber;
+              e.currentTarget.style.color = p.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = p.headerBorder;
+              e.currentTarget.style.color = p.textMuted;
+            }}
           >
+            {isDark ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+
+          <ToolButton onClick={() => setShowAddState(true)} title="Add state node">
+            <Plus size={14} />
+            Add State
+          </ToolButton>
+
+          <ToolButton onClick={handleResetLayout} title="Reset to default positions">
+            <RotateCcw size={14} />
             Reset layout
+          </ToolButton>
+
+          <button
+            onClick={handleSave}
+            disabled={!isDirty || saveWorkflow.isPending}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 12px",
+              background: isDirty ? p.amber : p.inputBg,
+              border: `1px solid ${isDirty ? p.amber : p.headerBorder}`,
+              borderRadius: 6,
+              color: isDirty ? "#000" : p.textMuted,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: isDirty ? "pointer" : "not-allowed",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            <Save size={13} />
+            {saveWorkflow.isPending ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1" style={{ minHeight: 0 }}>
-        <ReactFlow
-          nodes={displayNodes}
-          edges={edges}
-          nodeTypes={NODE_TYPES}
-          onNodesChange={onNodesChange}
-          colorMode={theme}
-          fitView
-          fitViewOptions={{ padding: 0.15 }}
-          minZoom={0.2}
-          maxZoom={2}
-          proOptions={{ hideAttribution: false }}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-          <Controls />
-          <MiniMap
-            nodeStrokeWidth={2}
-            nodeColor={(n) => {
-              const cat = (n.data as FSMNodeData).category;
-              const noAgent = (n.data as FSMNodeData).noAgent;
-              if (noAgent)          return "hsl(var(--status-reviewing))";
-              if (cat === "success")   return "hsl(var(--status-merged))";
-              if (cat === "fail")      return "hsl(var(--status-abandoned))";
-              if (cat === "escalated") return "hsl(var(--status-changes-requested))";
-              return "hsl(var(--status-planned))";
-            }}
-            maskColor="hsl(var(--background) / 0.6)"
+      {/* ── Canvas + side panel ───────────────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div style={{ flex: 1, position: "relative" as const }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onReconnect={onReconnect}
+            onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
+            onPaneClick={() => setSelectedEdgeId(null)}
+            nodeTypes={fsmNodeTypes}
+            edgeTypes={fsmEdgeTypes}
+            connectionMode={ConnectionMode.Loose}
+            edgesReconnectable
+            fitView
+            fitViewOptions={{ padding: 0.18 }}
+            minZoom={0.15}
+            maxZoom={2.5}
+            colorMode={p.rfColorMode}
+            proOptions={{ hideAttribution: false }}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={22}
+              size={1}
+              color={p.bgDots}
+            />
+            <Controls
+              position="bottom-left"
+              style={{
+                background: p.headerBg,
+                border: `1px solid ${p.headerBorder}`,
+                borderRadius: 8,
+              }}
+            />
+            <MiniMap
+              nodeColor={(n) => {
+                const d = n.data as FSMNodeData;
+                if (d.category === "success")   return "#15803d";
+                if (d.category === "fail")      return "#b91c1c";
+                if (d.category === "escalated") return "#c2410c";
+                if (d.noAgent)                  return "#78350f";
+                return "#d97706";
+              }}
+              maskColor={p.minimapMask}
+              style={{
+                background: p.minimapBg,
+                border: `1px solid ${p.headerBorder}`,
+                borderRadius: 8,
+              }}
+            />
+          </ReactFlow>
+        </div>
+
+        {selectedEdge && (
+          <TransitionPanel
+            edge={selectedEdge as Edge<FSMEdgeData>}
+            onUpdate={handleTransitionUpdate}
+            onDelete={handleTransitionDelete}
+            onClose={() => setSelectedEdgeId(null)}
           />
-        </ReactFlow>
+        )}
+      </div>
+
+      {showAddState && (
+        <AddStateDialog
+          existingStates={existingStates}
+          onConfirm={commitAddState}
+          onClose={() => setShowAddState(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Small helper components ───────────────────────────────────────────────────
+
+function LegendItem({
+  color,
+  label,
+  dashed,
+}: {
+  color: string;
+  label: string;
+  solid?: boolean;
+  dashed?: boolean;
+}) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <span
+        style={{
+          display: "inline-block",
+          width: 22,
+          height: 0,
+          borderTop: `1.5px ${dashed ? "dashed" : "solid"} ${color}`,
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function ToolButton({
+  children,
+  onClick,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title?: string;
+}) {
+  const { palette: p } = useTheme();
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "5px 10px",
+        background: "none",
+        border: `1px solid ${p.headerBorder}`,
+        borderRadius: 6,
+        color: p.textMuted,
+        fontSize: 12,
+        cursor: "pointer",
+        transition: "border-color 0.15s, color 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = p.inputBorder;
+        e.currentTarget.style.color = p.text;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = p.headerBorder;
+        e.currentTarget.style.color = p.textMuted;
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Add State dialog ──────────────────────────────────────────────────────────
+
+const CATEGORY_OPTIONS: Array<{ value: StateCategory; label: string; color: string; desc: string }> = [
+  { value: "active",    label: "Active",    color: "#d97706", desc: "Normal workflow state; agents can run here" },
+  { value: "success",   label: "Success",   color: "#15803d", desc: "Terminal — workflow completed successfully" },
+  { value: "fail",      label: "Fail",      color: "#b91c1c", desc: "Terminal — workflow abandoned or failed" },
+  { value: "escalated", label: "Escalated", color: "#c2410c", desc: "Terminal — requires manual intervention" },
+];
+
+function AddStateDialog({
+  existingStates,
+  onConfirm,
+  onClose,
+}: {
+  existingStates: Set<string>;
+  onConfirm: (name: string, category: StateCategory) => void;
+  onClose: () => void;
+}) {
+  const { palette: p } = useTheme();
+  const [name, setName]         = useState("");
+  const [category, setCategory] = useState<StateCategory>("active");
+  const [error, setError]       = useState<string | null>(null);
+  const inputRef                = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 30);
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function handleNameChange(v: string) {
+    setName(v.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+/, ""));
+    setError(null);
+  }
+
+  function handleConfirm() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError("State name is required."); return; }
+    if (existingStates.has(trimmed)) { setError(`"${trimmed}" already exists.`); return; }
+    onConfirm(trimmed, category);
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        backdropFilter: "blur(2px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={{
+          background: p.panelBg,
+          border: `1px solid ${p.panelBorder}`,
+          borderRadius: 12,
+          width: 380,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+          color: p.text,
+          fontFamily: "'Inter',-apple-system,sans-serif",
+          fontSize: 13,
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: "16px 18px 14px", borderBottom: `1px solid ${p.panelBorder}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Add state</span>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: p.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px" }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "18px 18px 6px" }}>
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: p.textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
+              State name
+            </label>
+            <input
+              ref={inputRef}
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleConfirm(); }}
+              placeholder="my_state_name"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                background: p.inputBg,
+                border: `1px solid ${error ? p.red : p.inputBorder}`,
+                borderRadius: 7,
+                color: p.text,
+                fontSize: 13,
+                fontFamily: "'SF Mono','Fira Code',monospace",
+                outline: "none",
+                boxSizing: "border-box",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={(e) => { if (!error) e.currentTarget.style.borderColor = p.amber; }}
+              onBlur={(e) => { if (!error) e.currentTarget.style.borderColor = p.inputBorder; }}
+            />
+            {error && <p style={{ marginTop: 5, fontSize: 11, color: p.textRed }}>{error}</p>}
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: p.textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>
+              Category
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setCategory(opt.value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    padding: "9px 12px",
+                    background: category === opt.value ? `${opt.color}14` : p.inputBg,
+                    border: `1px solid ${category === opt.value ? opt.color : p.inputBorder}`,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "border-color 0.15s, background 0.15s",
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: opt.color, flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: category === opt.value ? opt.color : p.text }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontSize: 11, color: p.textMuted, marginTop: 1 }}>{opt.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 18px 16px", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "7px 16px",
+              background: "none",
+              border: `1px solid ${p.inputBorder}`,
+              borderRadius: 7,
+              color: p.textMuted,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!name.trim()}
+            style={{
+              padding: "7px 18px",
+              background: name.trim() ? p.amber : p.inputBg,
+              border: `1px solid ${name.trim() ? p.amber : p.inputBorder}`,
+              borderRadius: 7,
+              color: name.trim() ? "#000" : p.textMuted,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: name.trim() ? "pointer" : "not-allowed",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            Add state
+          </button>
+        </div>
       </div>
     </div>
   );

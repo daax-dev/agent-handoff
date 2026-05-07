@@ -10,6 +10,7 @@ import { approvalRoutes } from "./routes/approvals.js";
 import { agentAssignmentRoutes } from "./routes/agent-assignments.js";
 import { agentSessionRoutes } from "./routes/agent-sessions.js";
 import { fsmMetaRoute } from "./routes/fsm-meta.js";
+import { fsmWorkflowRoute } from "./routes/fsm-workflow.js";
 import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
@@ -117,6 +118,13 @@ export function createApiServer(options: ServerOptions) {
       // FSM meta (transitions + role models)
       const fsmMetaResponse = fsmMetaRoute(path, req);
       if (fsmMetaResponse) return addCors(fsmMetaResponse, origin);
+
+      // FSM workflow config (editable transitions + HITL config + layout)
+      const fsmWorkflowResponse = fsmWorkflowRoute(path, req);
+      if (fsmWorkflowResponse instanceof Promise) {
+        return fsmWorkflowResponse.then((r) => addCors(r, origin));
+      }
+      if (fsmWorkflowResponse) return addCors(fsmWorkflowResponse, origin);
 
       // Approval routes (HITL)
       const approvalResponse = approvalRoutes(db, sse, path, req);
