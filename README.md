@@ -12,49 +12,123 @@ A local AI-assisted software development lifecycle system. ChangeSets flow throu
 git clone <repo>
 cd agent-handoff
 bun run setup
+```
+
+## Connect an agent
+
+### Claude Code (one command)
+
+Run this from inside the `agent-handoff` directory:
+
+```bash
+# Project-scoped (just your current project):
+claude mcp add agent-handoff -- bun run "$(pwd)/src/index.ts"
+
+# Global (available in every Claude Code session):
+claude mcp add --scope user agent-handoff -- bun run "$(pwd)/src/index.ts"
+```
+
+That's it. No JSON editing, no path copying. Restart Claude Code and the tools are live.
+
+### Other tools (Cursor, Windsurf, VS Code, Claude Desktop)
+
+All of them take the same command — just swap the path to wherever you cloned the repo:
+
+```bash
+# Get your absolute path:
+echo "$(pwd)/src/index.ts"
+```
+
+Then register `bun run <that path>` as an MCP stdio server in your tool's config. See [docs/installation-guide.md](docs/installation-guide.md) for copy-paste config blocks for every tool.
+
+---
+
+## Using it
+
+Installing the MCP gives your agent a set of tools. Here's what to actually do with them.
+
+### Step 1: See what agents are available
+
+```
+You: List available agents
+```
+
+The agent calls `list_agents` → shows which CLI tools (`claude`, `codex`, `gemini`, `aider`, etc.) are on your PATH and ready to receive work.
+
+### Step 2: Hand off a task
+
+```
+You: Hand off to claude: "Add a health check endpoint at GET /health"
+```
+
+The agent calls `handoff_task` → spawns a headless `claude -p` process, runs your prompt, captures output. Returns a job ID immediately so your session stays unblocked.
+
+### Step 3: Check and collect
+
+```
+You: Check on that handoff / Get the result
+```
+
+`check_status` → running / completed / failed  
+`get_result` → full output, files changed, git diff
+
+### Full tool list
+
+| Tool | What it does |
+|------|-------------|
+| `list_agents` | Show available CLI agents and their PATH status |
+| `handoff_task` | Delegate a task to another agent (CLI spawn or A2A) |
+| `check_status` | Poll a job's current state |
+| `get_result` | Fetch completed output, changed files, and diff |
+| `cancel_task` | Kill a running job |
+| `register_agent` | Add a remote A2A agent by URL |
+| `register_worker` | Join the pull-mode task pool as a worker |
+| `pull_task` | Grab the next queued task from the pool |
+| `submit_result` | Return completed work to the pool coordinator |
+| `worker_heartbeat` | Keep your worker registration alive (call every 30s) |
+| `list_workers` | See all registered workers and their status |
+| `create_change_set` | Start a new ChangeSet with isolated git worktree |
+| `submit_for_review` | Move a ChangeSet from implementing → reviewing |
+| `add_review_comment` | Attach a blocking/advisory/nit comment to a review |
+| `request_changes` | Require fixes before a ChangeSet can be approved |
+| `approve_change_set` | Approve and unblock a ChangeSet |
+| `claim_task` | Claim an assigned task as the implementing agent |
+| `log_decision` | Record a decision with rationale in the ChangeSet log |
+| `get_handoff_context` | Read the full context for a ChangeSet handoff |
+
+For full demos (push mode, pull mode, multi-agent pools, tmux) see [docs/installation-guide.md](docs/installation-guide.md).
+
+---
+
+## Optional: Web UI
+
+```bash
 bun run dev:web
 ```
 
-Open http://localhost:5173
-
-## What runs
+Open http://localhost:5173 for a live Kanban view of all ChangeSets and jobs.
 
 | Process | Default Port | Purpose |
 |---------|-------------|---------|
 | API server | 4000 | REST + SSE + SQLite |
 | UI dev server | 5173 | React SPA (Kanban + detail) |
-| MCP server | stdio | Agent tool calls via `bun run src/index.ts` |
+| MCP server | stdio | Agent tool calls |
 
-## Ports
+Ports are auto-detected if defaults are in use (API: 4000–4009, UI: 5173–5182). Set `PORT` and `VITE_UI_PORT` in `.env.local` to pin them.
 
-Ports are auto-detected — if 4000 is in use, the API starts on 4001, etc. (range: 4000–4009 for API, 5173–5182 for UI). The startup output always shows which ports were selected.
-
-To fix ports, set `PORT` and `VITE_UI_PORT` in `.env.local`.
-
-## Connect an agent
-
-Add to your Claude Code MCP settings (`~/.claude/claude_desktop_config.json` or similar):
-
-```json
-{
-  "mcpServers": {
-    "agent-handoff": {
-      "command": "bun",
-      "args": ["run", "src/index.ts"],
-      "cwd": "/absolute/path/to/agent-handoff"
-    }
-  }
-}
-```
+---
 
 ## Troubleshooting
 
-**Port already in use** — The dev script finds the next free port automatically. If all 10 ports in the range are blocked, free at least one and retry.
+**`list_agents` shows nothing available** — The CLI tools aren't on PATH. Install them (`brew install claude`, etc.) or verify with `which claude`.
 
-**Database errors on startup** — Delete `.work/` and re-run `bun run setup`. Your data is only in `.work/`; removing it starts fresh.
+**Server doesn't respond after `mcp add`** — Test it directly:
+```bash
+bun run src/index.ts
+# Should print "agent-handoff server started" to stderr
+```
+If it fails, run `bun install` in the project directory first.
 
-**`bun run setup` fails** — Check that Bun ≥ 1.0.0 is installed (`bun --version`). Ensure you have write access to the repo directory.
+**Database errors on startup** — Delete `.work/` and re-run `bun run setup`. All data lives in `.work/`; removing it starts fresh.
 
-## Configuration
-
-See `.env.example` for all configurable environment variables. Copy to `.env.local` to override defaults (`.env.local` is never committed).
+**Pull mode workers sharing state** — The MCP stdio transport spawns a new server per client, so workers in different terminals get separate queues by default. For shared queues, use push mode or run one coordinator session that manages the pool. See [docs/installation-guide.md](docs/installation-guide.md) for the multi-agent setup.
