@@ -1,0 +1,88 @@
+name: "PRD-014: Diff Viewer + Inline Review Comments"
+description: "Add a ChangeSet detail page to the React SPA with a unified diff viewer, inline review comment overlay, check run status panel, and FSM state history timeline."
+area: external-frontend
+goal: >
+  Implement the ChangeSet detail page — the primary human review interface.
+  The page shows the git diff of the ChangeSet's worktree vs. main, inline
+  review comments anchored to specific files and line numbers, check run
+  results, and an FSM history timeline. A human can resolve comments and
+  read the full review picture before making an approval decision.
+
+output_format: |
+  - ui/src/pages/ChangeSetDetail.tsx       — Detail page with tabs
+  - ui/src/components/DiffViewer.tsx       — Unified diff renderer
+  - ui/src/components/InlineComment.tsx    — Comment component rendered in diff
+  - ui/src/components/CheckRunPanel.tsx    — Check run results panel
+  - ui/src/components/FSMTimeline.tsx      — State machine history timeline
+  - ui/src/hooks/useChangeSetDetail.ts     — Composite data fetch hook
+
+constraints: |
+  - Diff rendering: Use diff2html (npm package) for HTML rendering of unified diff
+    output. Do NOT use Monaco editor (too heavy for a diff-only view).
+  - Diff source: GET /api/change-sets/:id/diff (new endpoint needed in PRD-004 or
+    added here) returns raw unified diff as text (runs git diff in the worktree).
+  - Add to REST API: GET /api/change-sets/:id/diff → Content-Type text/plain,
+    raw unified diff output from `git diff main...HEAD` in the worktree.
+  - Inline comment overlay: comments with file_path + line_number are rendered
+    below the corresponding diff line. Comments without a file/line (general
+    comments) appear in a sidebar.
+  - Resolve button on each comment calls PATCH /api/change-sets/:id/comments/:cid/resolve.
+    Resolved comments are visually dimmed (not hidden).
+  - Check run panel: shows all check_runs for the ChangeSet with status icon
+    (green check, red X, spinning for running), name, and expandable output.
+  - FSM timeline: shows fsm_checkpoints in chronological order —
+    each step as "from → to (trigger)" with timestamp.
+  - Page route: /change-sets/:id (add to App.tsx router).
+  - Navigation: ChangeSetCard on Kanban links to this page.
+  - The diff viewer must handle large diffs gracefully (>500 lines):
+    collapse unchanged hunks by default (diff2html supports this).
+
+failure_conditions: |
+  - Inline comments are not anchored to the correct diff line (off-by-one error
+    due to hunk header parsing).
+  - Resolving a comment does not visually update without page reload.
+  - GET /api/change-sets/:id/diff fails if the worktree has been torn down
+    (must return empty diff with a message, not 500).
+  - The page crashes on a ChangeSet with no diff (empty worktree).
+
+acceptance: |
+  - Criterion: ChangeSet detail page renders at /change-sets/chg_000001.
+    Verification: Open http://localhost:5173/change-sets/chg_000001 in browser;
+    page loads with diff viewer, check runs panel, and timeline visible.
+
+  - Criterion: Inline review comments appear anchored to correct diff lines.
+    Verification: Add a review comment with filePath="src/index.ts" lineNumber=42;
+    comment appears below line 42 in the diff view.
+
+  - Criterion: Resolving a comment updates its visual state without page reload.
+    Verification: Click "Resolve" on a comment; comment becomes visually dimmed
+    within 1 second (SSE or optimistic update).
+
+  - Criterion: Check run output is expandable.
+    Verification: Click on a failed check run in the panel; output text expands.
+
+  - Criterion: FSM timeline shows all state transitions in order.
+    Verification: After a draft→planned→implementing transition, timeline shows
+    3 entries in chronological order.
+
+  - Criterion: `cd ui && bun run typecheck` exits 0 with new components.
+    Verification: `cd ui && bun run typecheck` exits code 0.
+
+out_of_scope: |
+  - Side-by-side diff view (unified only for MVP).
+  - Comment creation from the UI (agents write comments via MCP tools; humans
+    can add comments via REST API or localsdlc CLI in PRD-016).
+  - Syntax highlighting within diff lines (diff2html HTML rendering only).
+
+reuse_map: |
+  - Extends: PRD-013 (adds route + links from KanbanBoard).
+  - Consumes: PRD-004 REST API (comments, check-runs, decisions, new /diff endpoint).
+  - Consumes: PRD-010 review comments API.
+  - Consumes: PRD-011 check runs API.
+  - Consumes: PRD-005 FSM checkpoints API.
+
+decisions_cited:
+  - DEC-002  # React SPA
+  - DEC-007  # MVP-5
+
+backlog_ref: none

@@ -1,0 +1,122 @@
+name: Bug report
+description: Something is broken. Please fill in every required field — incomplete reports will be closed.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. **Every required field must be filled in with real detail.**
+        Issues with placeholder text, "see title", or missing repro steps will be closed as `needs-info`.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [open and closed issues](../issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I reproduced this on the latest `main` (or documented the commit SHA below).
+          required: true
+        - label: This is not a security vulnerability (those go to Security Advisories).
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - external-frontend
+        - internal-frontend
+        - backend
+        - infra
+        - docs
+        - ci
+        - unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: |
+        - **critical**: data loss, prod outage, security-adjacent
+        - **high**: core flow broken, no workaround
+        - **medium**: feature broken but workaround exists
+        - **low**: cosmetic / minor
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences. What is broken?
+      placeholder: "Clicking 'Save' on the internal user form returns 500 instead of persisting the record."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, deterministic steps. If it isn't reproducible, say so and explain how often it occurs.
+      placeholder: |
+        1. `docker compose up --build`
+        2. Navigate to http://localhost:6174/internal/users
+        3. Click "New user", fill form, click Save
+        4. Observe 500 response in network tab
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: User is created and the list refreshes.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: 500 response; no record written to Postgres.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA / version
+      description: Output of `git rev-parse --short HEAD` or the deployed version.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS & runtime
+      description: e.g. "macOS 14.5, .NET 10.0.100, Bun 1.1.30, Chrome 129"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - local dev
+        - docker compose
+        - staging
+        - production
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace / screenshots
+      description: Paste relevant logs or attach screenshots. Trim to the relevant lines.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround (if any)

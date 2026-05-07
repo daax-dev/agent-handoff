@@ -1,0 +1,76 @@
+name: "PRD-010: Review Comment System"
+description: "Implement the review_comments SQLite table, CRUD operations, and REST endpoints that allow agents to file blocking/advisory/nit comments on a ChangeSet, and track which comments are resolved."
+area: backend
+goal: >
+  Implement the review comment system that agents use to communicate code
+  review findings. Comments are the gating mechanism for the
+  request_changes FSM transition (PRD-007 requires ≥1 blocking comment).
+  Humans and agents can resolve comments to unblock the approval path.
+
+output_format: |
+  - src/domain/review-comment.ts         — ReviewComment interface, Zod schema, CRUD
+  - migrations/004_review_comments.sql   — CREATE TABLE review_comments
+  - src/api/routes/review-comments.ts    — REST endpoints
+  - src/__tests__/review-comments.test.ts — Unit + API tests
+
+constraints: |
+  - review_comments table columns:
+      id TEXT PK, change_set_id TEXT NOT NULL,
+      author_agent TEXT NOT NULL, author_role TEXT NOT NULL,
+      file_path TEXT, line_number INTEGER,
+      body TEXT NOT NULL, severity TEXT NOT NULL CHECK(severity IN ('blocking','advisory','nit')),
+      resolved INTEGER NOT NULL DEFAULT 0,
+      resolved_by TEXT, resolved_at TEXT,
+      created_at TEXT NOT NULL
+  - REST endpoints:
+      GET  /api/change-sets/:id/comments           → list comments for ChangeSet
+      POST /api/change-sets/:id/comments           → add comment
+      PATCH /api/change-sets/:id/comments/:cid/resolve → mark resolved
+  - Filtering: GET supports ?severity=blocking&resolved=false query params.
+  - A comment cannot be un-resolved (resolve is one-way).
+  - listBlockingComments(changeSetId): helper function that returns all unresolved
+    blocking comments — used by request_changes guard in PRD-007.
+  - resolveComment(commentId, resolvedBy) sets resolved=1, resolved_by, resolved_at.
+  - Comments are immutable after creation (no edit endpoint).
+
+failure_conditions: |
+  - A blocking comment can be un-resolved (should throw CommentAlreadyResolvedError).
+  - listBlockingComments includes resolved comments.
+  - POST /api/change-sets/:id/comments with an invalid severity value returns 200
+    (must return 400).
+  - The request_changes guard in PRD-007 does not call listBlockingComments
+    (regression path).
+
+acceptance: |
+  - Criterion: Add a blocking comment and list it via REST.
+    Verification: `bun test src/__tests__/review-comments.test.ts` — add + list test passes.
+
+  - Criterion: listBlockingComments returns only unresolved blocking comments.
+    Verification: `bun test src/__tests__/review-comments.test.ts` — filter test:
+    add 2 blocking + 1 resolved blocking + 1 advisory; listBlockingComments returns 2.
+
+  - Criterion: resolve endpoint marks comment as resolved.
+    Verification: `curl -X PATCH http://localhost:4000/api/change-sets/chg_000001/comments/cmt_000001/resolve`
+    returns { resolved: true, resolvedAt: "..." }.
+
+  - Criterion: Attempting to resolve an already-resolved comment returns 409.
+    Verification: `bun test src/__tests__/review-comments.test.ts` — idempotency test passes.
+
+  - Criterion: GET /api/change-sets/:id/comments?severity=blocking&resolved=false
+    returns only unresolved blocking comments.
+    Verification: `bun test src/__tests__/review-comments.test.ts` — query filter test passes.
+
+out_of_scope: |
+  - Inline comment rendering in diff view (PRD-014 overlays comments on the diff).
+  - Comment threading / replies (single level only for MVP).
+  - Agent-automated comment resolution (agents call resolve explicitly; no auto-resolve).
+
+reuse_map: |
+  - Used by: PRD-007 request_changes guard (listBlockingComments).
+  - Used by: PRD-009 HandoffContext builder (reads blocking comments for context).
+  - Displayed by: PRD-014 Diff viewer (comment overlay on diff lines).
+
+decisions_cited:
+  - DEC-007  # MVP-4
+
+backlog_ref: none

@@ -1,0 +1,87 @@
+name: Feature request
+description: Propose a new capability. Incomplete requests will be closed.
+title: "[feat] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests need a clear problem statement, a concrete proposal, and acceptance criteria.
+        Vague "would be nice to have X" requests will be closed as `needs-info`.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [open and closed issues](../issues?q=is%3Aissue) and no equivalent request exists.
+          required: true
+        - label: This is not already covered by an item in `backlog/` or `docs/`.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - external-frontend
+        - internal-frontend
+        - backend
+        - infra
+        - docs
+        - cross-cutting
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem does this solve? Who is the user? What are they trying to do today and why does it fail?
+      placeholder: |
+        As an administrator managing 100+ users, I can't bulk-disable accounts when an employee group leaves.
+        Today I have to click each user individually, which takes ~15 minutes per batch.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Concrete proposal. API shape, UI sketch, or pseudo-code is welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you consider? Why is this proposal better?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist of observable outcomes. Each item must be independently verifiable.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: User impact
+      description: Who benefits and how much?
+      options:
+        - broad (all users, high value)
+        - broad (all users, incremental)
+        - narrow (specific role, high value)
+        - narrow (specific role, incremental)
+        - internal only
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / migration notes
+      description: Breaking changes, data migration, auth implications, perf cost, etc. Write "none known" if none.
+    validations:
+      required: true

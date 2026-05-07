@@ -1,0 +1,89 @@
+name: "PRD-011: Check Runner"
+description: "Implement CheckRunner — runs typecheck, lint, and test suites inside the ChangeSet's git worktree and records results as check_runs rows, blocking the approve transition if any required check fails."
+area: backend
+goal: >
+  Implement CheckRunner that executes configured checks (bun run typecheck,
+  bun run lint, bun test) inside the ChangeSet's worktree directory,
+  streams output to the task log file, records results in check_runs table,
+  and guards the reviewing → approved transition so approval is impossible
+  if any required check is in a failed state.
+
+output_format: |
+  - src/checks/runner.ts                 — CheckRunner class
+  - src/checks/check-config.ts           — Default check configuration
+  - migrations/005_check_runs.sql        — CREATE TABLE check_runs
+  - src/domain/check-run.ts             — CheckRun interface, Zod schema, CRUD
+  - src/api/routes/check-runs.ts        — GET /api/change-sets/:id/check-runs
+  - src/__tests__/check-runner.test.ts  — Integration tests
+
+constraints: |
+  - check_runs table columns:
+      id TEXT PK, change_set_id TEXT NOT NULL,
+      name TEXT NOT NULL CHECK(name IN ('typecheck','lint','test','security','custom')),
+      status TEXT NOT NULL CHECK(status IN ('pending','running','passed','failed','skipped')),
+      output TEXT, exit_code INTEGER,
+      started_at TEXT NOT NULL, completed_at TEXT
+  - Default checks for every ChangeSet (from check-config.ts):
+      - { name: "typecheck", command: "bun run typecheck", required: true }
+      - { name: "lint",      command: "bun run lint",      required: true }
+      - { name: "test",      command: "bun test",          required: true }
+  - CheckRunner.run(changeSetId) executes checks sequentially (not parallel),
+    with cwd set to the worktree path (WorktreeManager.getPath(taskId)).
+  - Check output (stdout + stderr) is written to .work/logs/TSK-XXXXXX.log
+    (appended, same file used for agent output SSE streaming).
+  - Each check's stdout/stderr is also stored in check_runs.output (truncated
+    to 50KB if larger).
+  - CheckRunner.allRequiredPassed(changeSetId) returns true only if all checks
+    with required: true have status "passed".
+  - The approve_change_set MCP tool (PRD-007) must call allRequiredPassed before
+    calling HITLGate/FSMEngine — if false, return { error: "required checks failed" }.
+  - Checks may be skipped (status: "skipped") if the worktree has no matching
+    files (e.g., no TypeScript files → skip typecheck). Skip ≠ fail.
+
+failure_conditions: |
+  - A failed required check does not block approve_change_set.
+  - CheckRunner.run() sets cwd to the main repo directory instead of the worktree.
+  - Check output > 50KB is stored without truncation (memory pressure).
+  - A check that exits with code 0 is recorded as "failed".
+  - Concurrent CheckRunner.run() calls for the same changeSetId create duplicate rows.
+
+acceptance: |
+  - Criterion: CheckRunner.run() creates 3 check_run rows (pending→running→passed/failed).
+    Verification: `bun test src/__tests__/check-runner.test.ts` — lifecycle test passes;
+    3 rows in check_runs after run.
+
+  - Criterion: A failing check sets status to "failed" with non-zero exit code.
+    Verification: `bun test src/__tests__/check-runner.test.ts` — failure test:
+    mock check returning exit code 1; check_runs.status = "failed".
+
+  - Criterion: allRequiredPassed returns false when any required check failed.
+    Verification: `bun test src/__tests__/check-runner.test.ts` — guard test:
+    one failed required check; allRequiredPassed returns false.
+
+  - Criterion: approve_change_set MCP tool returns error if required checks failed.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — check guard test:
+    call approve_change_set with failed typecheck; returns { error: "required checks failed" }.
+
+  - Criterion: GET /api/change-sets/:id/check-runs returns all check runs.
+    Verification: `curl -s http://localhost:4000/api/change-sets/chg_000001/check-runs | jq 'length'`
+    returns 3.
+
+  - Criterion: Check output appears in task log file.
+    Verification: `bun test src/__tests__/check-runner.test.ts` — log output test:
+    after run, .work/logs/TSK_000001.log contains check output lines.
+
+out_of_scope: |
+  - Security check (that is a separate agent role — security_reviewer in PRD-008).
+  - Custom check configuration per-ChangeSet (global config only for MVP).
+  - Parallel check execution (sequential is simpler and sufficient for MVP).
+
+reuse_map: |
+  - Uses: PRD-002 WorktreeManager.getPath() for cwd resolution.
+  - Uses: PRD-004 SSEBroadcaster (check output goes to log file → SSE via log-tail).
+  - Used by: PRD-007 approve_change_set guard.
+  - Displayed by: PRD-013 Kanban (check run status badges), PRD-014 Diff viewer.
+
+decisions_cited:
+  - DEC-007  # MVP-4
+
+backlog_ref: none

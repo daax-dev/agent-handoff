@@ -1,0 +1,98 @@
+name: "PRD-005: FSM Engine (State Transitions + Checkpoints)"
+description: "Implement FSMEngine — the hand-rolled TypeScript state machine that governs ChangeSet lifecycle transitions, persists checkpoints to SQLite, and handles the rejection loop and conflict-detected recovery path."
+area: backend
+goal: >
+  Implement FSMEngine with a declarative transition table, SQLite-persisted
+  checkpoints (one row per state entry), conditional routing (approve path vs.
+  request-changes loop), a circuit breaker for stuck ChangeSets after 3 failed
+  review cycles, and a conflict_detected intermediate state for merge conflict
+  recovery.
+
+output_format: |
+  - src/fsm/states.ts           — ChangeSetStatus enum + TRANSITIONS map
+  - src/fsm/engine.ts           — FSMEngine class (transition, checkpoint, getHistory)
+  - src/fsm/errors.ts           — InvalidTransitionError, CircuitBreakerError
+  - migrations/002_fsm.sql      — fsm_checkpoints table
+  - src/__tests__/fsm.test.ts   — Unit tests for all transitions + circuit breaker
+
+constraints: |
+  - The transition table (TRANSITIONS) is the single source of truth for which
+    transitions are legal. Do NOT add ad-hoc if/else guards outside this table.
+  - Transition table format:
+      { from: ChangeSetStatus, to: ChangeSetStatus, trigger: string }[]
+    Legal transitions (exhaustive):
+      draft          → planned             (trigger: "plan_accepted")
+      planned        → implementing        (trigger: "assign_implementer")
+      implementing   → reviewing           (trigger: "submit_for_review")
+      reviewing      → changes_requested   (trigger: "request_changes")
+      reviewing      → approved            (trigger: "approve")
+      changes_requested → implementing     (trigger: "pick_up_revision")
+      approved       → conflict_detected   (trigger: "merge_conflict_detected")
+      approved       → merged              (trigger: "merge")
+      conflict_detected → reviewing        (trigger: "conflict_resolved")
+      merged         → (terminal — no outgoing transitions)
+      abandoned      → (terminal — any status can transition to abandoned via "abandon")
+  - FSMEngine.transition(changeSetId, trigger) atomically:
+      1. Reads current status.
+      2. Looks up valid next status in TRANSITIONS.
+      3. If not found, throws InvalidTransitionError.
+      4. Writes new status to change_sets + inserts fsm_checkpoints row in one transaction.
+      5. Emits SSE event via SSEBroadcaster if provided (optional dep-inject).
+  - Circuit breaker: if reviewing→changes_requested has occurred 3 times for the
+    same changeSetId, transition to a special "escalated" status (add to enum)
+    instead of changes_requested, and throw CircuitBreakerError with cycle count.
+  - Checkpoints table: (id, change_set_id, from_status, to_status, trigger,
+    ts, metadata TEXT). metadata stores optional JSON blob (e.g., reviewer agent name).
+  - FSMEngine.getHistory(changeSetId) returns all checkpoint rows ordered by ts.
+  - The engine must work without the SSE broadcaster (optional injection) so that
+    it can be tested without a running HTTP server.
+
+failure_conditions: |
+  - An invalid trigger does not throw — silently updates status.
+  - The circuit breaker fires on the 2nd cycle instead of the 3rd.
+  - A transition succeeds but the checkpoint row is not written (partial update).
+  - Two concurrent calls to transition() for the same changeSetId corrupt state
+    (should use a SQLite transaction with BEGIN IMMEDIATE).
+  - getHistory() returns rows in insertion order rather than ts order.
+
+acceptance: |
+  - Criterion: Legal transition updates status and writes checkpoint row.
+    Verification: `bun test src/__tests__/fsm.test.ts` — happy-path transition test passes;
+    SELECT from fsm_checkpoints shows 1 row with correct from/to.
+
+  - Criterion: Invalid transition throws InvalidTransitionError.
+    Verification: `bun test src/__tests__/fsm.test.ts` — invalid transition test passes;
+    draft→merged throws, status unchanged in DB.
+
+  - Criterion: Circuit breaker fires after 3 review cycles.
+    Verification: `bun test src/__tests__/fsm.test.ts` — circuit breaker test:
+    transition reviewing→changes_requested 3 times; 4th cycle throws CircuitBreakerError
+    and status is "escalated".
+
+  - Criterion: conflict_detected path works end-to-end.
+    Verification: `bun test src/__tests__/fsm.test.ts` — conflict path test:
+    approved→conflict_detected→reviewing→approved→merged completes without error.
+
+  - Criterion: Concurrent transitions are serialized (no corrupt state).
+    Verification: `bun test src/__tests__/fsm.test.ts` — concurrency test:
+    10 concurrent transition calls on same changeSetId; only one succeeds per step.
+
+  - Criterion: REST API PATCH /api/change-sets/:id/status calls FSMEngine.transition().
+    Verification: `bun test src/__tests__/api.test.ts` — status patch test:
+    invalid trigger returns 422 with InvalidTransitionError message.
+
+out_of_scope: |
+  - HITL gate (PRD-006 adds pause/resume to the FSM).
+  - Agent dispatch triggering transitions (PRD-007 MCP tools do that).
+  - UI rendering of FSM history (PRD-013 or PRD-014).
+
+reuse_map: |
+  - Uses: PRD-001 ChangeSet CRUD (reads/writes change_sets.status).
+  - Integrates: PRD-004 SSEBroadcaster (optional injection for live events).
+  - Extended by: PRD-006 (HITL gate wraps FSMEngine.transition()).
+  - Extended by: PRD-007 MCP tools (call FSMEngine.transition() on behalf of agents).
+
+decisions_cited:
+  - DEC-001  # Hand-rolled TypeScript FSM — this IS that FSM
+
+backlog_ref: none

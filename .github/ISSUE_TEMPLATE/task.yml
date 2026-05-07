@@ -1,0 +1,77 @@
+name: Task (for agent backlog)
+description: A concrete, agent-actionable task. Mirrors backlog.md entries.
+title: "[task] "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tasks must be **agent-actionable**: a clearly scoped goal, enough context to start without asking,
+        and acceptance criteria that are mechanically verifiable.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing `backlog` tasks and open issues for duplicates.
+          required: true
+        - label: The scope fits in a single PR (if not, this should be a parent issue with child tasks).
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - external-frontend
+        - internal-frontend
+        - backend
+        - infra
+        - docs
+        - cross-cutting
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One sentence. The observable outcome when this task is done.
+      placeholder: "Add a `/healthz` endpoint to the backend that returns Postgres connectivity status."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What the agent needs to know up-front — link decisions, docs, related issues, relevant code paths.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Suggested approach
+      description: Files to touch, libraries to use, constraints to respect. Leave blank only if fully open-ended.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Each item must be testable or observable.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Commands or manual steps that prove it's done (e.g. `dotnet test`, `bun run typecheck`, curl request).
+    validations:
+      required: true
+  - type: input
+    id: backlog_ref
+    attributes:
+      label: Backlog reference
+      description: Matching `TASK-N` id in `backlog/`, or `none` if this issue is the source of truth.
+    validations:
+      required: true

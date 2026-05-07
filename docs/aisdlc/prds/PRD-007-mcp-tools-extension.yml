@@ -1,0 +1,112 @@
+name: "PRD-007: MCP Tools Extension (ChangeSet-Aware)"
+description: "Extend the existing MCP server with 6 new ChangeSet-aware tools that agents call to drive the review lifecycle — creating ChangeSets, submitting for review, adding comments, requesting changes, approving, and fetching HandoffContext."
+area: backend
+goal: >
+  Register 6 new MCP tools in src/index.ts that expose the ChangeSet
+  lifecycle to agents. Agents call these tools to move ChangeSets through
+  the FSM, add review comments, and retrieve structured context. This is
+  the primary interface between Claude agents and the local SDLC system.
+
+output_format: |
+  - src/mcp-tools/create-change-set.ts      — create_change_set tool handler
+  - src/mcp-tools/submit-for-review.ts      — submit_for_review tool handler
+  - src/mcp-tools/add-review-comment.ts     — add_review_comment tool handler
+  - src/mcp-tools/request-changes.ts        — request_changes tool handler
+  - src/mcp-tools/approve-change-set.ts     — approve_change_set tool handler
+  - src/mcp-tools/get-handoff-context.ts    — get_handoff_context tool handler
+  - src/index.ts (extended)                 — register the 6 new tools
+  - src/__tests__/mcp-tools.test.ts         — Tests via McpTestClient
+
+constraints: |
+  - All tools registered in src/index.ts using the existing server.tool() pattern.
+  - All tool input schemas defined with Zod (existing pattern in codebase).
+  - Tool descriptions must be precise enough that Claude agents know when to
+    call them without extra instruction. Every parameter must have a description.
+
+  create_change_set:
+    params: { taskId: string, title: string, description: string, targetBranch?: string }
+    behavior: Creates ChangeSet record + calls WorktreeManager.create() + transitions FSM to planned.
+    returns: { changeSetId: string, worktreePath: string }
+
+  submit_for_review:
+    params: { changeSetId: string }
+    behavior: Calls FSMEngine.transition(changeSetId, "submit_for_review").
+             Emits SSE event. Returns updated status.
+    returns: { changeSetId: string, status: string }
+
+  add_review_comment:
+    params: { changeSetId: string, body: string, severity: "blocking"|"advisory"|"nit",
+              filePath?: string, lineNumber?: number }
+    behavior: Inserts review_comments row. Does not change FSM state.
+    returns: { commentId: string }
+
+  request_changes:
+    params: { changeSetId: string, summary: string }
+    behavior: Calls FSMEngine.transition(changeSetId, "request_changes").
+             Requires ≥1 blocking comment to exist (else returns error).
+    returns: { changeSetId: string, status: string, blockingCommentCount: number }
+
+  approve_change_set:
+    params: { changeSetId: string, summary: string }
+    behavior: Calls HITLGate.transition(changeSetId, "approve") if HITL enabled,
+             else FSMEngine.transition directly.
+    returns: { changeSetId: string, status: string, hitlPending?: boolean, approvalId?: string }
+
+  get_handoff_context:
+    params: { changeSetId: string, role: string }
+    behavior: Calls HandoffContext builder (PRD-009) to return structured context.
+    returns: { context: HandoffContextPayload, tokenEstimate: number }
+
+  - All tools must return { error: string } (not throw) for expected error cases
+    (ChangeSet not found, invalid transition, etc.).
+  - Tools that call FSMEngine must handle InvalidTransitionError and return a
+    descriptive error message that tells the agent what state the ChangeSet is in.
+
+failure_conditions: |
+  - approve_change_set succeeds without HITL gate when HITL_ENABLED=true.
+  - request_changes succeeds with zero blocking comments (must be rejected).
+  - create_change_set with an invalid taskId silently creates a ChangeSet
+    with a null task_id (must validate task exists first).
+  - Existing 11 MCP tools break after extension (regression).
+  - Tool description is so vague an agent cannot determine when to call it.
+
+acceptance: |
+  - Criterion: create_change_set creates ChangeSet + worktree.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — create test:
+    call create_change_set; assert change_sets row + .work/worktrees/TSK_XXXXXX exists.
+
+  - Criterion: submit_for_review transitions FSM to reviewing.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — submit test:
+    status after call is "reviewing".
+
+  - Criterion: request_changes fails with zero blocking comments.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — guard test:
+    call request_changes with no blocking comments; returns { error: "..." }.
+
+  - Criterion: get_handoff_context returns context within token budget.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — context budget test:
+    tokenEstimate <= 9728.
+
+  - Criterion: All 11 existing MCP tools still pass their tests.
+    Verification: `bun test src/__tests__/` — no regression in existing tool tests.
+
+  - Criterion: New tools appear in MCP tool list.
+    Verification: `bun run src/index.ts` | MCP inspector shows 17 tools total (11 + 6).
+
+out_of_scope: |
+  - MCP resources (task://, diff:// resource URIs — future enhancement).
+  - write_plan tool for planner agent (PRD-003 SpecStore is used directly by the
+    planner agent via file I/O in the worktree; no MCP tool needed for MVP).
+  - Authentication on MCP tools (local stdio, trust is implicit).
+
+reuse_map: |
+  - Extends: src/index.ts — adds 6 tool registrations following existing pattern.
+  - Uses: PRD-001 ChangeSet CRUD, PRD-002 WorktreeManager, PRD-005 FSMEngine,
+          PRD-006 HITLGate, PRD-009 HandoffContext builder, PRD-010 review_comments.
+  - Pattern: Existing tool handlers in src/tools/ (handoff-task.ts etc.).
+
+decisions_cited:
+  - DEC-003  # A2A external only — internal comms via MCP tools (this PRD implements that)
+  - DEC-007  # MVP-3
+
+backlog_ref: none

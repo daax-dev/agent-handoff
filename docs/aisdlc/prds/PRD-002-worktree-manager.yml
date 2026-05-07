@@ -1,0 +1,74 @@
+name: "PRD-002: Git Worktree Lifecycle Manager"
+description: "Implement WorktreeManager — creates, tracks, and tears down one git worktree per task, keeping agent workspaces isolated from the main working tree."
+area: backend
+goal: >
+  Implement WorktreeManager that creates a git worktree at
+  .work/worktrees/TSK-XXXXXX/ on a dedicated branch (feat/TSK-XXXXXX),
+  persists the worktree path in the ChangeSet record, and tears it down
+  (prune + optionally delete the branch) when the ChangeSet is merged or
+  abandoned.
+
+output_format: |
+  - src/worktree/manager.ts    — WorktreeManager class
+  - src/__tests__/worktree.test.ts — Integration tests (requires actual git repo)
+  - .gitignore update          — add .work/worktrees/ to .gitignore
+
+constraints: |
+  - Use native git CLI via subprocess (Bun.spawn or child_process.execFile).
+    Do NOT use simple-git or any git library — the existing codebase uses
+    native git subprocess calls.
+  - Worktree directory: .work/worktrees/TSK-XXXXXX (relative to repo root).
+  - Branch name: feat/TSK-XXXXXX (slugified from task ID).
+  - Branch is created from the target_branch of the ChangeSet (default: main).
+  - WorktreeManager.create(taskId, targetBranch) must be idempotent:
+    if the worktree already exists, return the existing path without error.
+  - WorktreeManager.teardown(taskId, { deleteBranch: boolean }) prunes
+    the worktree and optionally deletes the branch.
+  - Worktree path is validated to be within .work/worktrees/ — no path traversal.
+  - The worktree path is stored in change_sets.worktree_path via PRD-001 CRUD.
+  - .work/ is gitignored entirely (add to .gitignore if not already present).
+
+failure_conditions: |
+  - create() called twice for the same taskId throws instead of being idempotent.
+  - Worktree created outside .work/worktrees/ (path traversal via taskId).
+  - teardown() with deleteBranch: false still deletes the branch.
+  - teardown() called on a non-existent worktree throws instead of being a no-op.
+  - change_sets.worktree_path is not updated after create().
+
+acceptance: |
+  - Criterion: create() creates worktree at .work/worktrees/TSK-000001 on branch feat/TSK-000001.
+    Verification: `bun test src/__tests__/worktree.test.ts` — create test passes;
+    `git worktree list` shows .work/worktrees/TSK-000001.
+
+  - Criterion: create() is idempotent — calling twice returns same path without error.
+    Verification: `bun test src/__tests__/worktree.test.ts` — idempotency test passes.
+
+  - Criterion: teardown() removes the worktree directory.
+    Verification: `bun test src/__tests__/worktree.test.ts` — teardown test passes;
+    directory .work/worktrees/TSK-000001 no longer exists after call.
+
+  - Criterion: teardown() with deleteBranch:true removes the branch.
+    Verification: `git branch --list feat/TSK-000001` returns empty after teardown.
+
+  - Criterion: Path traversal is rejected.
+    Verification: `bun test src/__tests__/worktree.test.ts` — path validation test:
+    create("../../../etc/passwd") throws WorktreePathError.
+
+  - Criterion: .work/ is in .gitignore.
+    Verification: `git check-ignore .work/worktrees/TSK-000001` returns the path.
+
+out_of_scope: |
+  - Conflict detection (that is part of the FSM engine, PRD-005).
+  - Rebase operations (PRD-005 triggers rebase via WorktreeManager.rebase()).
+  - Branch push to remote (PRD-017).
+
+reuse_map: |
+  - Pattern: src/cli/tmux-spawner.ts uses Bun.spawn for subprocess calls —
+    use same pattern for git subprocess calls.
+  - Uses: PRD-001 ChangeSet CRUD to update worktree_path after create().
+
+decisions_cited:
+  - DEC-006  # Pure local, no forge
+  - DEC-007  # 6-MVP staging — MVP-1
+
+backlog_ref: none

@@ -1,0 +1,83 @@
+name: "PRD-015: Live Agent Stream Panel"
+description: "Add a live agent output stream panel to the ChangeSet detail page — an SSE-fed terminal-like view that shows agent stdout in real time, with a toggle to switch between active tasks."
+area: external-frontend
+goal: >
+  Implement the live agent stream panel that satisfies the core user
+  requirement to "watch the agents somehow." The panel subscribes to
+  SSE agent_output events for a given task and renders them in a scrolling
+  terminal-like view. Peer to tmux (DEC-008): tmux is the power-user path;
+  this panel is the web UI path.
+
+output_format: |
+  - ui/src/components/StreamPanel.tsx      — Live stream panel component
+  - ui/src/components/AgentStreamPage.tsx  — Full-page stream view (optional route)
+  - ui/src/hooks/useAgentStream.ts         — SSE stream hook scoped to a taskId
+
+constraints: |
+  - StreamPanel subscribes to /events/stream and filters for events where
+    type === "agent_output" && payload.taskId === props.taskId.
+  - Rendered output: scrolling textarea-like div (monospace font, dark background,
+    auto-scroll to bottom on new lines). NOT an xterm.js integration — plain React.
+  - Auto-scroll behavior: if user has scrolled up (reading history), auto-scroll
+    stops. When user scrolls back to bottom, auto-scroll resumes.
+  - Historical log replay: on component mount, fetch .work/logs/TSK-XXXXXX.log
+    via new endpoint GET /api/tasks/:id/log (plain text response, file contents).
+    Render historical lines first, then subscribe to SSE for live lines.
+  - Task selector: if the ChangeSet has multiple tasks, show a tab or dropdown
+    to switch between task log streams.
+  - Add to REST API: GET /api/tasks/:id/log → Content-Type text/plain, returns
+    contents of .work/logs/TSK-XXXXXX.log (or empty string if not started).
+  - StreamPanel is embedded in ChangeSetDetail.tsx as a collapsible section.
+  - Maximum log lines displayed: 2000 (virtual scrolling not required; truncate
+    older lines when limit reached).
+  - useAgentStream hook:
+      returns { lines: string[], isLive: boolean, taskId: string }
+      isLive = true when an SSE connection is open for that taskId.
+
+failure_conditions: |
+  - Auto-scroll does not stop when user scrolls up (races with user interaction).
+  - Historical lines are not loaded on panel mount (blank panel until live event).
+  - SSE events from a different taskId appear in the stream (filtering failure).
+  - Panel renders HTML content from log lines (XSS vector — must plain-text render,
+    no dangerouslySetInnerHTML).
+  - GET /api/tasks/:id/log returns 500 if log file does not yet exist
+    (must return 200 with empty body).
+
+acceptance: |
+  - Criterion: StreamPanel renders historical log content on mount.
+    Verification: Start an agent; wait for it to produce some output; open ChangeSet
+    detail page; stream panel shows existing log lines without waiting for new output.
+
+  - Criterion: Live log lines appear in panel within 1 second of agent writing them.
+    Verification: Manual test: watch panel while agent runs; lines appear in near-realtime.
+
+  - Criterion: Auto-scroll stops when user scrolls up; resumes when scrolled to bottom.
+    Verification: Manual test in browser: scroll up → no auto-scroll; scroll to bottom
+    → auto-scroll resumes.
+
+  - Criterion: Panel does not render HTML in log lines (plain text only).
+    Verification: `bun test ui/src/__tests__/StreamPanel.test.tsx` — XSS test:
+    log line containing "<script>alert(1)</script>" renders as literal text.
+
+  - Criterion: GET /api/tasks/:id/log returns 200 with empty body for a new task.
+    Verification: `curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/tasks/TSK_999999/log`
+    returns 200.
+
+  - Criterion: `cd ui && bun run typecheck` exits 0.
+    Verification: `cd ui && bun run typecheck` exits code 0.
+
+out_of_scope: |
+  - xterm.js / VT100 escape sequence rendering (plain text only for MVP).
+  - Tmux integration from the browser (tmux is a separate peer path, not embedded).
+  - Search/filter within log stream.
+  - Log download.
+
+reuse_map: |
+  - Extends: PRD-013 App.tsx (new embedded component in ChangeSet detail).
+  - Consumes: PRD-004 SSEBroadcaster (agent_output events from log-tail watcher).
+  - Consumes: New GET /api/tasks/:id/log endpoint (added to PRD-004 routes).
+
+decisions_cited:
+  - DEC-008  # Tmux and log-tail SSE as peers
+
+backlog_ref: none

@@ -1,0 +1,85 @@
+name: "PRD-012: Per-Task Decision Log"
+description: "Implement a per-task append-only decision log (DEC-XXXX entries scoped to TSK-XXXXXX) that agents and humans use to record architectural decisions, stored in SQLite and exportable as JSONL."
+area: backend
+goal: >
+  Implement a per-task decision log system so that every ChangeSet has a
+  traceable record of why key choices were made. Agent and human entries are
+  stored in a decisions SQLite table and can be exported to JSONL alongside
+  the global .logs/decisions.jsonl. This log becomes part of the GitHub PR
+  body on export (PRD-017).
+
+output_format: |
+  - src/domain/decision.ts              — DecisionEntry interface, Zod schema, CRUD
+  - migrations/006_decisions.sql        — CREATE TABLE decisions
+  - src/mcp-tools/log-decision.ts       — log_decision MCP tool
+  - src/api/routes/decisions.ts         — REST endpoints
+  - src/__tests__/decisions.test.ts     — Unit tests
+
+constraints: |
+  - decisions table columns:
+      id TEXT PK,                        -- DEC-XXXXXX (scoped per task)
+      task_id TEXT NOT NULL,
+      change_set_id TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      options_considered TEXT NOT NULL,  -- JSON array
+      choice TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      sources_cited TEXT,                -- JSON array of strings
+      author_agent TEXT,                 -- null if human
+      ts TEXT NOT NULL                   -- ISO 8601
+  - Decision IDs are scoped per task: DEC-000001 (global counter, unique across all tasks).
+  - log_decision MCP tool:
+      params: { taskId, changeSetId, topic, optionsConsidered: string[],
+                choice, rationale, sourcesCited?: string[] }
+      returns: { decisionId: string }
+  - REST endpoints:
+      GET /api/tasks/:id/decisions        → list decisions for task
+      GET /api/change-sets/:id/decisions  → list decisions for ChangeSet
+      POST /api/tasks/:id/decisions       → create (human entry)
+  - exportToJSONL(taskId): writes all task decisions to
+    .work/tasks/TSK-XXXXXX/decisions.jsonl in same format as global .logs/decisions.jsonl.
+  - The global .logs/decisions.jsonl (planning-phase decisions, DEC-001 through DEC-013)
+    is NOT modified by this system. This PRD handles runtime decisions per task.
+
+failure_conditions: |
+  - Decision IDs are not globally unique (two tasks create DEC-000001).
+  - options_considered stored as a plain string instead of JSON array (breaks export).
+  - exportToJSONL does not include all decisions for the task.
+  - log_decision MCP tool succeeds with empty topic or rationale.
+
+acceptance: |
+  - Criterion: log_decision MCP tool creates a decision entry.
+    Verification: `bun test src/__tests__/decisions.test.ts` — create test:
+    call log_decision; SELECT from decisions WHERE task_id = "TSK_000001" returns 1 row.
+
+  - Criterion: Decision IDs are unique across tasks.
+    Verification: `bun test src/__tests__/decisions.test.ts` — uniqueness test:
+    create decisions in 2 tasks; all IDs distinct.
+
+  - Criterion: GET /api/tasks/:id/decisions returns decisions in ts order.
+    Verification: `curl -s http://localhost:4000/api/tasks/TSK_000001/decisions | jq '.[0].decisionId'`
+    returns "DEC-000001".
+
+  - Criterion: exportToJSONL writes valid JSONL file.
+    Verification: `bun test src/__tests__/decisions.test.ts` — export test:
+    create 3 decisions; exportToJSONL; file has 3 lines, each valid JSON.
+
+  - Criterion: log_decision rejects empty rationale.
+    Verification: `bun test src/__tests__/decisions.test.ts` — validation test:
+    call with rationale=""; returns { error: "rationale is required" }.
+
+out_of_scope: |
+  - Exporting decisions to GitHub PR body (PRD-017).
+  - Searching decisions across tasks (single-task scope only for MVP).
+  - Decision categories / tagging.
+
+reuse_map: |
+  - Pattern: global .logs/decisions.jsonl format (same JSON structure).
+  - Used by: PRD-009 HandoffContext builder (could include recent decisions in
+    architecture context slot — optional enhancement).
+  - Used by: PRD-017 GitHub bridge (PR body includes decision log).
+
+decisions_cited:
+  - DEC-011  # Forward-reference acceptance criteria convention
+
+backlog_ref: none

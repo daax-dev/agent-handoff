@@ -1,0 +1,114 @@
+name: "PRD-016: localsdlc CLI"
+description: "Implement the localsdlc CLI — a developer-facing command-line interface for creating tasks, checking status, reviewing ChangeSets, approving HITL gates, merging, and invoking the GitHub bridge."
+area: backend
+goal: >
+  Implement the localsdlc CLI tool as the primary human interface for
+  driving the AI SDLC from the terminal. The CLI wraps the REST API,
+  provides a fast command-and-inspect loop, and is the interface through
+  which humans approve HITL gates, trigger merges, and export to GitHub.
+
+output_format: |
+  - src/cli/localsdlc.ts         — CLI entry point (commander.js)
+  - src/cli/commands/             — One file per subcommand
+  - package.json update           — Add "localsdlc" bin entry pointing to src/cli/localsdlc.ts
+
+constraints: |
+  - CLI framework: commander.js (add to dependencies if not present). No yargs.
+  - All commands communicate with the REST API at http://localhost:4000
+    (no direct DB access from CLI — HTTP only).
+  - Base URL configurable via LOCALSDLC_API_URL env var (default http://localhost:4000).
+  - Subcommands (8 total):
+
+    localsdlc init
+      Creates .work/ directory structure. Prints setup instructions.
+      Idempotent — safe to run multiple times.
+
+    localsdlc new <title> [--task-id TSK_XXXXXX]
+      Creates a new Task + ChangeSet via POST /api/change-sets.
+      Opens spec.md in $EDITOR after creation.
+      Prints: "Created TSK_000001 / chg_000001"
+
+    localsdlc status [<changeSetId>]
+      If changeSetId given: shows detailed ChangeSet status (FSM state,
+      check runs summary, blocking comment count, last updated).
+      If no ID: lists all active ChangeSets with one-line status each.
+
+    localsdlc review <changeSetId>
+      Prints review summary: blocking comments (formatted), check run results.
+      Shortcut: localsdlc review → lists all ChangeSets in reviewing status.
+
+    localsdlc approve <changeSetId>
+      Calls POST /api/approvals/:id/approve (for HITL-gated ChangeSets).
+      For non-HITL ChangeSets: calls PATCH /api/change-sets/:id/status with trigger "approve".
+      Prompts for confirmation: "Approve chg_000001? [y/N]"
+
+    localsdlc merge <changeSetId>
+      Calls FSM trigger "merge" via PATCH /api/change-sets/:id/status.
+      Requires HITL approval to have been granted.
+      Runs git merge in the main worktree.
+      Prints: "Merged chg_000001 into main"
+
+    localsdlc export <changeSetId> [--remote origin] [--draft]
+      See PRD-017.
+
+    localsdlc import-issue <github-issue-url>
+      See PRD-017.
+
+  - localsdlc status outputs human-readable table (use cli-table3 or plain
+    template strings — no heavy formatting library).
+  - localsdlc approve prompts for confirmation before calling the API.
+  - All subcommands exit with code 0 on success, 1 on error, and print
+    error message to stderr.
+  - Help text: `localsdlc --help` and `localsdlc <command> --help` must work.
+
+failure_conditions: |
+  - localsdlc approve calls the API without confirmation prompt.
+  - localsdlc merge succeeds when ChangeSet is not in "approved" status
+    (API must reject, CLI must surface the error).
+  - localsdlc status with no running API server crashes instead of printing
+    a helpful "API server not running" message.
+  - CLI makes direct SQLite calls instead of going through the REST API.
+
+acceptance: |
+  - Criterion: localsdlc --help prints usage without error.
+    Verification: `bun run src/cli/localsdlc.ts --help` exits code 0 and lists commands.
+
+  - Criterion: localsdlc init creates .work/ directory structure.
+    Verification: `bun run src/cli/localsdlc.ts init && ls .work/` shows
+    worktrees/, tasks/, logs/ directories.
+
+  - Criterion: localsdlc new "My feature" creates Task + ChangeSet.
+    Verification: `bun run src/cli/localsdlc.ts new "My feature"` exits 0 and
+    prints "Created TSK_000001 / chg_000001" (or similar).
+
+  - Criterion: localsdlc status lists all active ChangeSets.
+    Verification: `bun run src/cli/localsdlc.ts status` exits 0 and prints
+    a table with at least one row when a ChangeSet exists.
+
+  - Criterion: localsdlc status <id> prints ChangeSet detail.
+    Verification: `bun run src/cli/localsdlc.ts status chg_000001` exits 0 and
+    prints status, check runs, and blocking comment count.
+
+  - Criterion: localsdlc approve prompts for confirmation.
+    Verification: `echo "n" | bun run src/cli/localsdlc.ts approve chg_000001`
+    exits without calling the API (cancelled by user).
+
+  - Criterion: localsdlc works when installed as a bin.
+    Verification: `bun install && localsdlc --help` works after `bun link` or
+    `bun install -g`.
+
+out_of_scope: |
+  - TUI / interactive mode (simple linear commands only).
+  - localsdlc watch (tmux provides live output; StreamPanel handles web view).
+  - Authentication.
+
+reuse_map: |
+  - Consumes: PRD-004 REST API (all HTTP calls go through the API).
+  - Consumes: PRD-006 approval endpoints.
+  - Used by: PRD-017 (export + import-issue subcommands live here).
+
+decisions_cited:
+  - DEC-005  # TypeScript/Bun throughout
+  - DEC-007  # MVP-6
+
+backlog_ref: none

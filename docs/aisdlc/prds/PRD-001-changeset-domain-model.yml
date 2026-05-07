@@ -1,0 +1,79 @@
+name: "PRD-001: ChangeSet Domain Model + State Machine"
+description: "Define the ChangeSet entity, SQLite schema, Zod validation schemas, and the TypeScript state enum that drives the entire review lifecycle."
+area: backend
+goal: >
+  Implement the ChangeSet domain model — including SQLite table definition,
+  Zod schemas, TypeScript types, CRUD operations, and the state enum with
+  its valid transition table — so that all subsequent PRDs have a stable
+  data contract to build against.
+
+output_format: |
+  - src/domain/change-set.ts       — ChangeSet interface, Zod schema, CRUD functions
+  - src/domain/task.ts             — Task interface, Zod schema, CRUD functions
+  - src/types.ts (extended)        — ChangeSetStatus enum, ChangeSet + Task types appended
+  - migrations/001_changeset.sql   — CREATE TABLE change_sets, tasks (with all fields)
+  - migrations/runner.ts           — Lightweight migration runner (reads *.sql, tracks applied)
+  - src/__tests__/changeset.test.ts — Unit tests for CRUD + transition guard
+
+constraints: |
+  - Use bun:sqlite exclusively — no external ORM, no Drizzle, no Prisma.
+  - Transition guard: calling setStatus() with an invalid transition MUST throw
+    InvalidTransitionError (not silently ignore or corrupt state).
+  - The jobs table in src/job-store.ts must gain a nullable change_set_id column
+    via migration 001 (ALTER TABLE jobs ADD COLUMN change_set_id TEXT).
+  - ChangeSet IDs: "chg_" + 6-digit zero-padded counter (chg_000001).
+    Task IDs: "TSK_" + 6-digit zero-padded counter (TSK_000001).
+  - All timestamps stored as ISO 8601 UTC strings.
+  - github_issue_url, github_pr_url, remote_branch fields present from day one
+    (even though populated only in MVP-6), per DEC-010.
+  - No external dependencies beyond bun:sqlite and zod (already in package.json).
+
+failure_conditions: |
+  - Setting status to an invalid transition does not throw.
+  - A ChangeSet can be created without a title or task_id.
+  - The migration runner runs the same migration twice (idempotency failure).
+  - Type mismatch between Zod schema and TypeScript interface (must be inferred
+    from schema, not hand-written independently).
+  - The jobs table change_set_id column is missing after migration.
+
+acceptance: |
+  - Criterion: migrations/runner.ts creates change_sets and tasks tables on fresh DB.
+    Verification: `bun run src/__tests__/changeset.test.ts` — migration test passes.
+
+  - Criterion: ChangeSet CRUD round-trip.
+    Verification: `bun test src/__tests__/changeset.test.ts` — createChangeSet,
+    getChangeSet, updateChangeSet, listChangeSets all pass.
+
+  - Criterion: Valid state transitions succeed; invalid ones throw.
+    Verification: `bun test src/__tests__/changeset.test.ts` — transition tests:
+    draft→planned passes; planned→merged throws InvalidTransitionError.
+
+  - Criterion: jobs table has change_set_id column after migration.
+    Verification: `bun run scripts/check-schema.ts` prints "change_set_id: TEXT" in jobs table output.
+
+  - Criterion: Zod schema rejects a ChangeSet object with missing title.
+    Verification: `bun test src/__tests__/changeset.test.ts` — schema validation test passes.
+
+  - Criterion: ChangeSet IDs are formatted as chg_000001.
+    Verification: `bun test src/__tests__/changeset.test.ts` — ID format test passes.
+
+out_of_scope: |
+  - FSM engine (PRD-005 owns the transition orchestration; this PRD only defines valid transitions).
+  - REST API endpoints (PRD-004).
+  - Git worktree creation (PRD-002).
+  - Review comments, check runs (PRD-010, PRD-011).
+  - UI (PRD-013 through PRD-015).
+
+reuse_map: |
+  - Extends: src/job-store.ts — add migration runner call at startup;
+    add change_set_id column to jobs table via migration.
+  - Extends: src/types.ts — append ChangeSet*, Task* types.
+  - Pattern source: existing job-store.ts CRUD pattern (SELECT/INSERT/UPDATE via bun:sqlite).
+
+decisions_cited:
+  - DEC-001  # Hand-rolled TypeScript FSM
+  - DEC-004  # ChangeSet naming (chg_XXXXXX)
+  - DEC-005  # TypeScript/Bun throughout
+  - DEC-007  # 6-MVP staging — this is MVP-1 root
+
+backlog_ref: none
