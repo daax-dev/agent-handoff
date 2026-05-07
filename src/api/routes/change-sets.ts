@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { resolve } from "node:path";
 import {
   createChangeSet,
   getChangeSet,
@@ -9,6 +10,7 @@ import {
   CreateChangeSetInputSchema,
 } from "../../domain/change-set.js";
 import { InvalidTransitionError } from "../../fsm/errors.js";
+import { FSMEngine } from "../../fsm/engine.js";
 import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
 
@@ -17,7 +19,7 @@ export function changeSetRoutes(
   sse: SSEBroadcaster,
   path: string,
   req: Request
-): Response | null {
+): Response | Promise<Response> | null {
   const url = new URL(req.url);
   const { method } = req;
 
@@ -71,6 +73,45 @@ export function changeSetRoutes(
         return err(e instanceof Error ? e.message : String(e));
       }
     }) as unknown as Response;
+  }
+
+  // GET /api/change-sets/:id/diff
+  const diffMatch = path.match(/^\/api\/change-sets\/(chg_\d{6})\/diff$/);
+  if (diffMatch && method === "GET") {
+    const id = diffMatch[1];
+    const cs = getChangeSet(db, id);
+    if (!cs) return notFound("ChangeSet not found");
+    return (async () => {
+      try {
+        const worktreePath = resolve(process.cwd(), cs.worktree_path);
+        const proc = Bun.spawn(["git", "diff", "main...HEAD"], {
+          cwd: worktreePath,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const text = await new Response(proc.stdout).text();
+        await proc.exited;
+        return new Response(text || "", {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      } catch {
+        return new Response("[diff unavailable: worktree not found or git error]", {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+    })();
+  }
+
+  // GET /api/change-sets/:id/checkpoints
+  const checkpointsMatch = path.match(/^\/api\/change-sets\/(chg_\d{6})\/checkpoints$/);
+  if (checkpointsMatch && method === "GET") {
+    const id = checkpointsMatch[1];
+    const cs = getChangeSet(db, id);
+    if (!cs) return notFound("ChangeSet not found");
+    const engine = new FSMEngine(db);
+    return json(engine.getHistory(id));
   }
 
   return null;

@@ -60,3 +60,42 @@ export const KANBAN_COLUMNS: ChangeSetStatus[] = [
   "merged",
   "abandoned",
 ];
+
+export type CommentSeverity = "blocking" | "major" | "minor" | "info";
+
+export interface ReviewComment {
+  id: string;
+  change_set_id: string;
+  author_agent: string;
+  severity: CommentSeverity;
+  body: string;
+  file_path: string | null;
+  line_number: number | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export type CheckRunStatus = "pending" | "running" | "passed" | "failed" | "skipped";
+export type CheckRunName = "typecheck" | "lint" | "test" | "security" | "custom";
+
+export interface CheckRun {
+  id: string;
+  change_set_id: string;
+  name: CheckRunName;
+  status: CheckRunStatus;
+  output: string | null;
+  exit_code: number | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface FSMCheckpoint {
+  id: string;
+  change_set_id: string;
+  from_status: string;
+  to_status: string;
+  trigger: string;
+  ts: string;
+  metadata: string | null;
+}

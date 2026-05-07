@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,12 @@ export function ChangeSetCard({ changeSet }: ChangeSetCardProps) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-medium leading-snug line-clamp-2">
-            {changeSet.title}
+            <Link
+              to={`/change-sets/${changeSet.id}`}
+              className="hover:underline"
+            >
+              {changeSet.title}
+            </Link>
           </CardTitle>
           <Badge variant={statusVariant(changeSet.status)} className="shrink-0">
             {statusLabel(changeSet.status)}

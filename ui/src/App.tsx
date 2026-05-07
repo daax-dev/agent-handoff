@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard } from "@/pages/KanbanBoard";
+import { ChangeSetDetail } from "@/pages/ChangeSetDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,7 @@ function App() {
           <main className="flex-1 overflow-auto">
             <Routes>
               <Route path="/" element={<KanbanBoard />} />
+              <Route path="/change-sets/:id" element={<ChangeSetDetail />} />
             </Routes>
           </main>
         </div>
