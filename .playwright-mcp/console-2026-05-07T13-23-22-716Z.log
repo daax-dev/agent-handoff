@@ -1,0 +1,96 @@
+[   25218ms] TypeError: Cannot read properties of undefined (reading 'planner')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:241:26
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:238:66
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:236:39
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:234:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+[   25218ms] TypeError: Cannot read properties of undefined (reading 'planner')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:241:26
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:238:66
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:236:39
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:234:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+[   25175ms] [ERROR] The above error occurred in the <FlowDiagram> component:
+
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:223:21)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4544:15)
+    at HashRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:5326:5)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=124b0cc8:3235:3)
+    at ThemeProvider (http://localhost:5173/src/components/ThemeProvider.tsx:21:33)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:14079
+[   25218ms] TypeError: Cannot read properties of undefined (reading 'planner')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:241:26
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:238:66
+    at Array.map (<anonymous>)
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:236:39
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160227849:234:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+[   34800ms] TypeError: Cannot read properties of undefined (reading 'filter')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:264:46
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:260:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:15962:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:3680:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:3705:24)
+[   34802ms] TypeError: Cannot read properties of undefined (reading 'filter')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:264:46
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:260:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:15962:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:3680:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:3705:24)
+[   34802ms] [ERROR] The above error occurred in the <FlowDiagram> component:
+
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:223:21)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4544:15)
+    at HashRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:5326:5)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=124b0cc8:3235:3)
+    at ThemeProvider (http://localhost:5173/src/components/ThemeProvider.tsx:21:33)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:14079
+[   34802ms] TypeError: Cannot read properties of undefined (reading 'filter')
+    at http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:264:46
+    at mountMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12242:27)
+    at Object.useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:12566:24)
+    at useMemo (http://localhost:5173/node_modules/.vite/deps/chunk-3TFVT2CW.js?v=124b0cc8:1094:29)
+    at FlowDiagram (http://localhost:5173/src/pages/FlowDiagram.tsx?t=1778160237462:260:17)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:15962:22)
+    at beginWork$1 (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:19806:22)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:19251:20)

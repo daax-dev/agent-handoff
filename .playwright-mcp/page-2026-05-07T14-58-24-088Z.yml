@@ -1,0 +1,167 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to dark mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "FSM Flow" [level=1] [ref=e29]
+          - paragraph [ref=e30]: Drag nodes to rearrange · positions are saved per browser
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]: circuit breaker
+            - generic [ref=e35]:
+              - generic [ref=e36]: 🔒
+              - text: HITL gated
+            - generic [ref=e37]:
+              - generic [ref=e38]: ⚠
+              - text: no agent (will stall)
+          - button "Reset layout" [ref=e39] [cursor=pointer]
+      - application [ref=e41]:
+        - generic [ref=e43]:
+          - generic:
+            - generic:
+              - img
+              - img:
+                - group "Edge from draft to planned" [ref=e44] [cursor=pointer]:
+                  - generic [ref=e47]:
+                    - generic: plan_accepted
+              - img:
+                - group "Edge from planned to implementing" [ref=e49] [cursor=pointer]:
+                  - generic [ref=e50]:
+                    - generic: assign_implementer
+              - img:
+                - group "Edge from implementing to reviewing" [ref=e52] [cursor=pointer]:
+                  - generic [ref=e55]:
+                    - generic: submit_for_review
+              - img:
+                - group "Edge from reviewing to changes_requested" [ref=e57] [cursor=pointer]:
+                  - generic [ref=e60]:
+                    - generic: request_changes
+              - img:
+                - group "Edge from reviewing to approved" [ref=e62] [cursor=pointer]:
+                  - generic [ref=e65]:
+                    - generic: 🔒 approve
+              - img:
+                - group "Edge from changes_requested to implementing" [ref=e67] [cursor=pointer]:
+                  - generic [ref=e70]:
+                    - generic: pick_up_revision
+              - img:
+                - group "Edge from approved to conflict_detected" [ref=e72] [cursor=pointer]:
+                  - generic [ref=e75]:
+                    - generic: merge_conflict_detected
+              - img:
+                - group "Edge from approved to merged" [ref=e77] [cursor=pointer]:
+                  - generic [ref=e80]:
+                    - generic: 🔒 merge
+              - img:
+                - group "Edge from conflict_detected to implementing" [ref=e82] [cursor=pointer]:
+                  - generic [ref=e85]:
+                    - generic: conflict_reopen
+              - img:
+                - group "Edge from conflict_detected to reviewing" [ref=e87] [cursor=pointer]:
+                  - generic [ref=e90]:
+                    - generic: conflict_resolved
+              - img:
+                - group "Edge from reviewing to escalated" [ref=e92] [cursor=pointer]:
+                  - generic [ref=e93]:
+                    - generic: circuit_breaker (3× request_changes)
+            - generic:
+              - group [ref=e95]:
+                - generic [ref=e96]:
+                  - generic [ref=e102]: draft
+                  - generic [ref=e103]: ⚠ no agent — will stall here
+              - group [ref=e104]:
+                - generic [ref=e105]:
+                  - generic [ref=e111]: planned
+                  - generic [ref=e113]:
+                    - generic [ref=e114]: planner
+                    - generic [ref=e115]:
+                      - text: Claude Code
+                      - generic [ref=e116]: · sonnet-4-6
+              - group [ref=e117]:
+                - generic [ref=e118]:
+                  - generic [ref=e124]: implementing
+                  - generic [ref=e126]:
+                    - generic [ref=e127]: implementer
+                    - generic [ref=e128]:
+                      - text: Claude Code
+                      - generic [ref=e129]: · sonnet-4-6
+              - group [ref=e130]:
+                - generic [ref=e131]:
+                  - generic [ref=e137]: reviewing
+                  - generic [ref=e138]:
+                    - generic [ref=e139]:
+                      - generic [ref=e140]: reviewer
+                      - generic [ref=e141]:
+                        - text: Copilot CLI
+                        - generic [ref=e142]: · sonnet-4-6
+                    - generic [ref=e143]:
+                      - generic [ref=e144]: security_reviewer
+                      - generic [ref=e145]:
+                        - text: Codex
+                        - generic [ref=e146]: · opus-4-7
+              - group [ref=e147]:
+                - generic [ref=e148]:
+                  - generic [ref=e154]: changes_requested
+                  - generic [ref=e156]:
+                    - generic [ref=e157]: fixer
+                    - generic [ref=e158]:
+                      - text: Claude Code
+                      - generic [ref=e159]: · sonnet-4-6
+              - group [ref=e160]:
+                - generic [ref=e161]:
+                  - generic [ref=e167]: approved
+                  - generic [ref=e168]: ⚠ no agent — will stall here
+              - group [ref=e169]:
+                - generic [ref=e170]:
+                  - generic [ref=e176]: conflict_detected
+                  - generic [ref=e177]: ⚠ no agent — will stall here
+              - group [ref=e178]:
+                - generic [ref=e179]:
+                  - generic [ref=e184]:
+                    - generic [ref=e185]: merged
+                    - generic [ref=e186]: TERMINAL
+                  - generic [ref=e188]:
+                    - generic [ref=e189]: summarizer
+                    - generic [ref=e190]:
+                      - text: Claude Code
+                      - generic [ref=e191]: · haiku-4-5-20251001
+              - group [ref=e192]:
+                - generic [ref=e193]:
+                  - generic [ref=e198]:
+                    - generic [ref=e199]: abandoned
+                    - generic [ref=e200]: TERMINAL
+                  - generic [ref=e201]: ← abandon from any active state
+              - group [ref=e202]:
+                - generic [ref=e208]:
+                  - generic [ref=e209]: escalated
+                  - generic [ref=e210]: TERMINAL
+        - img
+        - generic "Control Panel" [ref=e211]:
+          - button "Zoom In" [ref=e212] [cursor=pointer]:
+            - img [ref=e213]
+          - button "Zoom Out" [ref=e215] [cursor=pointer]:
+            - img [ref=e216]
+          - button "Fit View" [ref=e218] [cursor=pointer]:
+            - img [ref=e219]
+          - button "Toggle Interactivity" [ref=e221] [cursor=pointer]:
+            - img [ref=e222]
+        - img "Mini Map" [ref=e225]
+        - link "React Flow attribution" [ref=e237] [cursor=pointer]:
+          - /url: https://reactflow.dev
+          - text: React Flow

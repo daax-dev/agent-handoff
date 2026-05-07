@@ -1,0 +1,116 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to dark mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e25]:
+    - generic [ref=e118]:
+      - heading "Settings" [level=1] [ref=e119]
+      - paragraph [ref=e120]: Configure which agent handles each FSM step and monitor live agent sessions.
+      - generic [ref=e121]:
+        - button "Agent Assignments" [ref=e122] [cursor=pointer]
+        - button "Live Sessions" [ref=e123] [cursor=pointer]
+      - table [ref=e127]:
+        - rowgroup [ref=e128]:
+          - row "FSM State Role Tool Enabled" [ref=e129]:
+            - columnheader "FSM State" [ref=e130]
+            - columnheader "Role" [ref=e131]
+            - columnheader "Tool" [ref=e132]
+            - columnheader "Enabled" [ref=e133]
+        - rowgroup [ref=e134]:
+          - row "changes_requested fixer Claude Code" [ref=e135]:
+            - cell "changes_requested" [ref=e136]
+            - cell "fixer" [ref=e137]
+            - cell "Claude Code" [ref=e138]:
+              - combobox [ref=e139]:
+                - option "Claude Code" [selected]
+                - option "Codex"
+                - option "Cursor"
+                - option "Copilot CLI"
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e140]:
+              - checkbox [checked] [ref=e141] [cursor=pointer]
+          - row "implementing implementer Claude Code" [ref=e142]:
+            - cell "implementing" [ref=e143]
+            - cell "implementer" [ref=e144]
+            - cell "Claude Code" [ref=e145]:
+              - combobox [ref=e146]:
+                - option "Claude Code" [selected]
+                - option "Codex"
+                - option "Cursor"
+                - option "Copilot CLI"
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e147]:
+              - checkbox [checked] [ref=e148] [cursor=pointer]
+          - row "merged summarizer Claude Code" [ref=e149]:
+            - cell "merged" [ref=e150]
+            - cell "summarizer" [ref=e151]
+            - cell "Claude Code" [ref=e152]:
+              - combobox [ref=e153]:
+                - option "Claude Code" [selected]
+                - option "Codex"
+                - option "Cursor"
+                - option "Copilot CLI"
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e154]:
+              - checkbox [checked] [ref=e155] [cursor=pointer]
+          - row "planned planner Claude Code" [ref=e156]:
+            - cell "planned" [ref=e157]
+            - cell "planner" [ref=e158]
+            - cell "Claude Code" [ref=e159]:
+              - combobox [ref=e160]:
+                - option "Claude Code" [selected]
+                - option "Codex"
+                - option "Cursor"
+                - option "Copilot CLI"
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e161]:
+              - checkbox [checked] [ref=e162] [cursor=pointer]
+          - row "reviewing reviewer Copilot CLI" [ref=e163]:
+            - cell "reviewing" [ref=e164]
+            - cell "reviewer" [ref=e165]
+            - cell "Copilot CLI" [ref=e166]:
+              - combobox [ref=e167]:
+                - option "Claude Code"
+                - option "Codex"
+                - option "Cursor"
+                - option "Copilot CLI" [selected]
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e168]:
+              - checkbox [checked] [ref=e169] [cursor=pointer]
+          - row "reviewing security_reviewer Codex" [ref=e170]:
+            - cell "reviewing" [ref=e171]
+            - cell "security_reviewer" [ref=e172]
+            - cell "Codex" [ref=e173]:
+              - combobox [ref=e174]:
+                - option "Claude Code"
+                - option "Codex" [selected]
+                - option "Cursor"
+                - option "Copilot CLI"
+                - option "Gemini"
+                - option "Aider"
+                - option "Human (HITL)"
+            - cell [ref=e175]:
+              - checkbox [checked] [ref=e176] [cursor=pointer]

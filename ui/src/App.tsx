@@ -1,11 +1,12 @@
 import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LayoutDashboard, Settings2 } from "lucide-react";
+import { LayoutDashboard, Settings2, GitBranch } from "lucide-react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { KanbanBoard } from "@/pages/KanbanBoard";
 import { ChangeSetDetail } from "@/pages/ChangeSetDetail";
 import { Settings } from "@/pages/Settings";
+import { FlowDiagram } from "@/pages/FlowDiagram";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,10 @@ function Nav() {
       <NavLink to="/" end className={linkClass}>
         <LayoutDashboard size={14} />
         Board
+      </NavLink>
+      <NavLink to="/flow" className={linkClass}>
+        <GitBranch size={14} />
+        Flow
       </NavLink>
       <NavLink to="/settings" className={linkClass}>
         <Settings2 size={14} />
@@ -50,6 +55,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<KanbanBoard />} />
                 <Route path="/change-sets/:id" element={<ChangeSetDetail />} />
+                <Route path="/flow" element={<FlowDiagram />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </main>
