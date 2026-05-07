@@ -1,0 +1,41 @@
+roles:
+  planner:
+    model: claude-sonnet-4-6
+    description: Breaks task specs into implementable subtasks and writes plan.md
+    prompt_template: roles/prompts/planner.md
+
+  implementer:
+    model: claude-sonnet-4-6
+    description: Writes code in the assigned worktree based on spec and plan
+    prompt_template: roles/prompts/implementer.md
+    max_context_tokens: 8500
+
+  test_agent:
+    model: claude-haiku-4-5-20251001
+    description: Writes and runs tests for the ChangeSet
+    prompt_template: roles/prompts/test-agent.md
+
+  reviewer:
+    model: claude-sonnet-4-6
+    description: Code review focused on correctness and maintainability
+    prompt_template: roles/prompts/reviewer.md
+
+  security_reviewer:
+    model: claude-opus-4-7
+    description: Security review — OWASP, injection, supply chain, secrets
+    prompt_template: roles/prompts/security-reviewer.md
+
+  architecture_reviewer:
+    model: claude-opus-4-7
+    description: Checks design decisions against ADRs and platform architecture
+    prompt_template: roles/prompts/architecture-reviewer.md
+
+  fixer:
+    model: claude-sonnet-4-6
+    description: Addresses blocking review comments and re-implements narrow changes
+    prompt_template: roles/prompts/fixer.md
+
+  summarizer:
+    model: claude-haiku-4-5-20251001
+    description: Generates ChangeSet summary for export to GitHub PR body
+    prompt_template: roles/prompts/summarizer.md

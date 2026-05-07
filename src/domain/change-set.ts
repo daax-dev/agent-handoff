@@ -16,6 +16,8 @@ export const ChangeSetStatusSchema = z.enum([
   "conflict_detected",
   "merged",
   "abandoned",
+  "escalated",
+  "awaiting_human_approval",
 ]);
 
 export type ChangeSetStatus = z.infer<typeof ChangeSetStatusSchema>;
@@ -25,13 +27,15 @@ export const VALID_TRANSITIONS: Readonly<
 > = {
   draft: ["planned", "abandoned"],
   planned: ["implementing", "abandoned"],
-  implementing: ["reviewing", "changes_requested", "abandoned"],
+  implementing: ["reviewing", "abandoned"],
   reviewing: ["approved", "changes_requested", "abandoned"],
   changes_requested: ["implementing", "abandoned"],
   approved: ["merged", "conflict_detected", "abandoned"],
-  conflict_detected: ["implementing", "abandoned"],
+  conflict_detected: ["implementing", "reviewing", "abandoned"],
   merged: [],
   abandoned: [],
+  escalated: ["abandoned"],
+  awaiting_human_approval: ["approved", "abandoned"],
 };
 
 // ---------------------------------------------------------------------------

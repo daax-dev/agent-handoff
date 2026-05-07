@@ -12,6 +12,13 @@ import { handlePullTask } from "./tools/pull-task.js";
 import { handleSubmitResult } from "./tools/submit-result.js";
 import { handleWorkerHeartbeat } from "./tools/worker-heartbeat.js";
 import { handleListWorkers } from "./tools/list-workers.js";
+import { handleCreateChangeSet } from "./mcp-tools/create-change-set.js";
+import { handleSubmitForReview } from "./mcp-tools/submit-for-review.js";
+import { handleAddReviewComment } from "./mcp-tools/add-review-comment.js";
+import { handleRequestChanges } from "./mcp-tools/request-changes.js";
+import { handleApproveChangeSet } from "./mcp-tools/approve-change-set.js";
+import { handleGetHandoffContext } from "./mcp-tools/get-handoff-context.js";
+import { getDb } from "./db.js";
 
 const server = new McpServer({
   name: "agent-handoff",
@@ -136,6 +143,91 @@ server.tool(
   "List all registered workers and their current status.",
   {},
   async () => handleListWorkers()
+);
+
+// ChangeSet-aware MCP tools (PRD-007)
+server.tool(
+  "create_change_set",
+  "Create a new ChangeSet for a task, setting up a git worktree and transitioning the FSM to 'planned'. Call this when starting work on a new task that needs its own isolated workspace.",
+  {
+    taskId: z.string().describe("Task ID (TSK_XXXXXX format) this ChangeSet belongs to"),
+    title: z.string().describe("Short human-readable title for the ChangeSet"),
+    description: z.string().optional().describe("Longer description of the changes being made"),
+    targetBranch: z.string().optional().describe("Branch to merge into (default: main)"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleCreateChangeSet(args, db);
+  }
+);
+
+server.tool(
+  "submit_for_review",
+  "Submit a ChangeSet for review, transitioning it from 'implementing' to 'reviewing'. Call this when implementation is complete and ready for agent code review.",
+  {
+    changeSetId: z.string().describe("ChangeSet ID (chg_XXXXXX) to submit for review"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleSubmitForReview(args, db);
+  }
+);
+
+server.tool(
+  "add_review_comment",
+  "Add a review comment to a ChangeSet. Use severity='blocking' for issues that must be fixed before approval, 'advisory' for recommended improvements, 'nit' for minor style suggestions.",
+  {
+    changeSetId: z.string().describe("ChangeSet ID to add the comment to"),
+    body: z.string().describe("The review comment text"),
+    severity: z.enum(["blocking", "advisory", "nit"]).describe("Comment severity: 'blocking' prevents approval, 'advisory' is recommended, 'nit' is optional"),
+    filePath: z.string().optional().describe("File path the comment refers to (optional)"),
+    lineNumber: z.number().optional().describe("Line number the comment refers to (optional)"),
+    authorAgent: z.string().optional().describe("Name of the reviewing agent (e.g. 'security_reviewer')"),
+    authorRole: z.string().optional().describe("Role of the reviewing agent"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleAddReviewComment(args, db);
+  }
+);
+
+server.tool(
+  "request_changes",
+  "Request changes on a ChangeSet, transitioning it from 'reviewing' to 'changes_requested'. Requires at least one blocking review comment to exist. Use this after adding blocking comments.",
+  {
+    changeSetId: z.string().describe("ChangeSet ID to request changes on"),
+    summary: z.string().describe("Summary of why changes are being requested"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleRequestChanges(args, db);
+  }
+);
+
+server.tool(
+  "approve_change_set",
+  "Approve a ChangeSet, transitioning it from 'reviewing' to 'approved'. Use this only when all blocking issues are resolved and the implementation meets the acceptance criteria.",
+  {
+    changeSetId: z.string().describe("ChangeSet ID to approve"),
+    summary: z.string().describe("Summary of the review outcome and why the ChangeSet is approved"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleApproveChangeSet(args, db);
+  }
+);
+
+server.tool(
+  "get_handoff_context",
+  "Retrieve a structured, token-budget-enforced context payload for a ChangeSet and role. Returns spec, diff, acceptance criteria, blocking comments, and architecture context. Use before starting work on a ChangeSet.",
+  {
+    changeSetId: z.string().describe("ChangeSet ID to get context for"),
+    role: z.string().describe("Your agent role (planner, implementer, reviewer, security_reviewer, architecture_reviewer, fixer, test_agent, summarizer)"),
+  },
+  async (args) => {
+    const db = getDb();
+    return handleGetHandoffContext(args, db);
+  }
 );
 
 // Start server
