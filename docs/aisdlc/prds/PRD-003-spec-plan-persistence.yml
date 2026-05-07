@@ -1,0 +1,70 @@
+name: "PRD-003: Spec and Plan File Persistence"
+description: "Implement SpecStore — reads and writes spec.md, plan.md, and acceptance.md for each task in .work/tasks/TSK-XXXXXX/, version-controlled alongside the code."
+area: backend
+goal: >
+  Implement SpecStore that manages the three canonical planning artifacts
+  (spec.md, plan.md, acceptance.md) for each task. These files live at
+  .work/tasks/TSK-XXXXXX/ and are the single source of truth for task
+  context passed to agents via HandoffContext (PRD-009).
+
+output_format: |
+  - src/spec/store.ts                  — SpecStore class
+  - src/spec/templates.ts              — Default file templates (empty spec, etc.)
+  - src/__tests__/spec-store.test.ts   — Unit tests
+
+constraints: |
+  - All files written to .work/tasks/TSK-XXXXXX/{spec,plan,acceptance}.md.
+  - .work/tasks/ is gitignored (part of .work/).
+  - SpecStore.write(taskId, kind, content) creates the directory if needed.
+  - SpecStore.read(taskId, kind) returns null (not throws) if file does not exist.
+  - SpecStore.exists(taskId, kind) returns boolean.
+  - File encoding: UTF-8 throughout.
+  - No locking — single-process writes only (no concurrent writers).
+  - spec.md template includes sections: ## Goal, ## Context, ## Constraints,
+    ## Out of Scope.
+  - acceptance.md template includes section: ## Acceptance Criteria (checklist).
+  - plan.md has no template — written by the planner agent verbatim.
+  - Task ID in path is validated: must match /^TSK_\d{6}$/ — no traversal.
+
+failure_conditions: |
+  - read() throws instead of returning null for a missing file.
+  - write() silently fails if .work/tasks/TSK-XXXXXX/ doesn't exist
+    (must create directory).
+  - An invalid task ID (e.g. "../../etc") is accepted in the path.
+  - spec.md and acceptance.md are written to the same file (wrong kind param).
+
+acceptance: |
+  - Criterion: write + read round-trip for all three kinds.
+    Verification: `bun test src/__tests__/spec-store.test.ts` — round-trip tests pass.
+
+  - Criterion: read() returns null for missing file (not an exception).
+    Verification: `bun test src/__tests__/spec-store.test.ts` — missing-file test passes.
+
+  - Criterion: write() creates directory if it doesn't exist.
+    Verification: `bun test src/__tests__/spec-store.test.ts` — fresh-dir test passes.
+
+  - Criterion: Invalid task ID is rejected.
+    Verification: `bun test src/__tests__/spec-store.test.ts` — path validation test:
+    write("../../etc", "spec", "x") throws SpecPathError.
+
+  - Criterion: spec.md default template has ## Goal, ## Context, ## Constraints,
+    ## Out of Scope sections.
+    Verification: `bun test src/__tests__/spec-store.test.ts` — template test passes.
+
+out_of_scope: |
+  - Spec content validation (the planner agent writes spec.md — content is
+    its responsibility).
+  - Version history of spec files (git tracks these via the worktree in PRD-002).
+  - GitHub issue import (PRD-017).
+
+reuse_map: |
+  - Pattern: Bun.file() for reads; Bun.write() for writes (same pattern as
+    existing JSONL logger in src/logger.ts).
+  - Used by: PRD-009 HandoffContext builder (reads spec.md, acceptance.md).
+  - Used by: PRD-007 MCP tools (agents write plan.md via write_plan MCP tool).
+
+decisions_cited:
+  - DEC-005  # TypeScript/Bun throughout
+  - DEC-007  # MVP-1
+
+backlog_ref: none

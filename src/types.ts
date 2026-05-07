@@ -150,6 +150,29 @@ export interface WorkerHeartbeatInput {
   workerId: string;
 }
 
+// ---------------------------------------------------------------------------
+// ChangeSet domain types (MVP-1, PRD-001)
+// Re-exported from domain modules; kept here as the canonical shared surface.
+// ---------------------------------------------------------------------------
+
+export type {
+  ChangeSetStatus,
+  ChangeSet,
+  CreateChangeSetInput,
+} from "./domain/change-set.js";
+
+export type {
+  TaskStatus,
+  Task,
+  CreateTaskInput,
+} from "./domain/task.js";
+
+export { VALID_TRANSITIONS } from "./domain/change-set.js";
+
+// ---------------------------------------------------------------------------
+// Event types
+// ---------------------------------------------------------------------------
+
 export type HandoffEventType =
   | "task_created"
   | "task_started"

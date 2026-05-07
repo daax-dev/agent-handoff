@@ -1,0 +1,85 @@
+name: "PRD-009: HandoffContext Builder"
+description: "Implement HandoffContext builder — constructs a structured, token-budget-enforced context payload from spec, diff, acceptance criteria, and blocking comments, replacing the raw prompt string in agent dispatch."
+area: backend
+goal: >
+  Implement HandoffContextBuilder that assembles a focused context payload
+  for each agent role, enforcing per-slot token budgets. Replaces the naked
+  prompt string passed to handoff_task with a structured payload that
+  reduces context from ~31K to ~9.7K tokens (70%+ reduction) while
+  preserving all information the agent needs.
+
+output_format: |
+  - src/context/handoff-context.ts         — HandoffContextBuilder class
+  - src/context/token-estimator.ts         — Lightweight token estimator (char/4 heuristic)
+  - src/context/slots.ts                   — Slot definitions + budget constants
+  - src/__tests__/handoff-context.test.ts  — Unit tests
+
+constraints: |
+  - HandoffContextBuilder.build(changeSetId, role) returns HandoffContextPayload:
+      {
+        taskSpec: string,          // from SpecStore spec.md, truncated to 2048 tokens
+        diff: string,              // from git diff worktree..main, truncated to 5120 tokens
+        acceptanceCriteria: string,// from SpecStore acceptance.md, truncated to 1024 tokens
+        blockingComments: string,  // from review_comments WHERE blocking=true, 512 tokens
+        architectureContext: string,// plan.md excerpt, 1024 tokens
+        rolePrompt: string,        // role prompt template with {{handoff_context}} replaced
+        tokenEstimate: number,     // sum of all slot estimates
+        truncatedSlots: string[],  // list of slot names that were truncated
+      }
+  - Total budget: 9728 tokens (2048 + 5120 + 1024 + 512 + 1024 = 9728).
+  - Token estimator: characters / 4 (industry standard approximation). NOT a
+    tiktoken dependency — no external tokenizer library.
+  - Each slot is independently truncated at its budget. If truncated, the content
+    ends with: "\n[truncated — full content at <path>]".
+  - If diff is empty (no changes yet), the diff slot contains: "[no diff yet]".
+  - If no blocking comments, blockingComments slot contains: "[no blocking comments]".
+  - HandoffContextBuilder.buildString(changeSetId, role) renders the payload
+    as a single string for injection into the role prompt template.
+  - The builder does NOT call out to external APIs. All data comes from SQLite
+    (review_comments), SpecStore (spec/plan/acceptance files), and git diff
+    (subprocess call).
+
+failure_conditions: |
+  - Total context exceeds 9728 tokens due to missed truncation.
+  - Truncation cuts mid-word (must truncate at word boundary).
+  - git diff subprocess failure crashes the builder (must return "[diff unavailable]").
+  - truncatedSlots is empty when a slot was truncated (must list all truncated slots).
+  - HandoffContextBuilder called with an unknown role does not throw.
+
+acceptance: |
+  - Criterion: build() returns total tokenEstimate <= 9728.
+    Verification: `bun test src/__tests__/handoff-context.test.ts` — budget test:
+    build with large spec + diff; assert tokenEstimate <= 9728.
+
+  - Criterion: Truncated slots are listed in truncatedSlots array.
+    Verification: `bun test src/__tests__/handoff-context.test.ts` — truncation test:
+    spec > 2048 tokens; truncatedSlots includes "taskSpec".
+
+  - Criterion: git diff failure returns "[diff unavailable]" gracefully.
+    Verification: `bun test src/__tests__/handoff-context.test.ts` — diff failure test:
+    mock git returning error; diff slot is "[diff unavailable]", no exception.
+
+  - Criterion: buildString() includes role prompt with context injected.
+    Verification: `bun test src/__tests__/handoff-context.test.ts` — string render test:
+    output contains role-specific instruction text + task spec content.
+
+  - Criterion: get_handoff_context MCP tool returns tokenEstimate <= 9728.
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — context tool test
+    already covers this (see PRD-007).
+
+out_of_scope: |
+  - MCP resource URIs (task://, diff://) — post-MVP enhancement for richer context refs.
+  - tiktoken or other exact tokenizer — char/4 heuristic is sufficient for budgeting.
+  - Caching of built contexts (rebuild on every call for freshness).
+
+reuse_map: |
+  - Uses: PRD-003 SpecStore (reads spec.md, acceptance.md).
+  - Uses: PRD-010 review_comments (reads blocking comments from SQLite).
+  - Uses: PRD-008 AgentRoleRegistry (gets role prompt template).
+  - Used by: PRD-007 get_handoff_context MCP tool.
+  - Used by: PRD-016 localsdlc CLI (context preview command).
+
+decisions_cited:
+  - DEC-009  # HandoffContext builder with structured MCP resource refs
+
+backlog_ref: none

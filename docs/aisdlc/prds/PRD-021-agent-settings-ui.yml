@@ -1,0 +1,73 @@
+name: "PRD-021: Agent Settings UI — Tool Assignment + Session Status"
+description: "A Settings page in the React SPA where a developer can see which tool handles each FSM step, change the assignment, see which agent sessions are currently connected, and understand the full dispatch configuration without reading YAML or SQL."
+area: external-frontend
+goal: >
+  Configuration of which agent handles which step must be visible and editable from the UI.
+  A developer should be able to answer "what runs when this ChangeSet hits 'reviewing'?"
+  in two clicks. They should also see which sessions are currently connected and waiting
+  for work, and manually trigger a re-dispatch if an agent got stuck.
+
+output_format: |
+  - ui/src/pages/Settings.tsx              — Settings page: Agent Assignments + Sessions tabs
+  - ui/src/components/AssignmentTable.tsx  — Editable table: state → role → tool dropdown
+  - ui/src/components/SessionStatus.tsx    — Live session list with heartbeat age + status badge
+  - ui/src/hooks/useAgentAssignments.ts    — TanStack Query: GET/PUT agent-assignments
+  - ui/src/hooks/useAgentSessions.ts       — TanStack Query + SSE refresh: GET agent-sessions
+  - ui/src/App.tsx                         — Add /settings route + Settings nav link
+  - ui/src/types.ts                        — AgentAssignment + AgentSession types
+
+constraints: |
+  ASSIGNMENT TABLE:
+  Columns: FSM State | Role | Tool | Enabled toggle
+  Tool is a dropdown with options:
+    Claude Code (claude-code)
+    Codex       (codex)
+    Copilot CLI (copilot-cli)
+    Aider       (aider)
+    Human (HITL)(human)
+  Changes are saved immediately on dropdown change (optimistic update, PUT to API).
+  A row with Enabled=off means no agent is spawned for that state/role (manual intervention).
+
+  SESSION STATUS:
+  Shows live sessions from GET /api/agent-sessions, refreshed every 5s via polling.
+  Columns: Tool | Roles | Status | Last Heartbeat | Current Task
+  Status badges: waiting (green), busy (blue/spinning), disconnected (red).
+  Last heartbeat shown as relative time ("12s ago") — red if >60s.
+
+  LAYOUT:
+  Settings is a full-page route at /settings.
+  Nav shows "Settings" link (gear icon) on the right side of the top bar.
+  Two tabs within Settings: "Agent Assignment" and "Live Sessions".
+
+  No confirmation dialogs for assignment changes — they take effect immediately.
+  A toast notification on successful save ("Assignment updated").
+  A toast on failure with the error message.
+
+failure_conditions: |
+  - Changing a tool assignment requires a page reload to take effect (must be live).
+  - Session list does not show disconnected sessions (they should show for 5 minutes before
+    being hidden, so developers can see what crashed).
+  - Assignment table shows internal key names (claude-code) instead of human labels (Claude Code).
+  - No feedback when a PUT request fails.
+
+acceptance: |
+  - Criterion: Assignment table renders defaults.
+    Verification: Navigate to /settings; table shows 6+ rows with Claude Code as default tool.
+
+  - Criterion: Changing tool updates assignment without reload.
+    Verification: Change "implementing / implementer" to "Codex"; reload page; dropdown
+    still shows "Codex" (persisted to DB).
+
+  - Criterion: Session list shows connected agents.
+    Verification: Start a mock agent that calls claim_task; session appears in UI within 5s.
+
+  - Criterion: `cd ui && bun run typecheck` exits 0.
+
+out_of_scope: |
+  - Per-ChangeSet tool override (global assignment only for now).
+  - Killing or restarting agent sessions from the UI.
+  - Viewing agent session logs from the Settings page (that's ChangeSet detail / StreamPanel).
+
+reuse_map: |
+  - Consumes: PRD-020 backend (agent-assignments API, agent-sessions API).
+  - Extends: PRD-019 design system (uses new theme tokens).

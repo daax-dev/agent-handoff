@@ -2,6 +2,17 @@
 dist/
 node_modules/
 
+# Runtime artifacts (worktrees, task specs, agent logs, SQLite DB)
+.work/
+
+# SQLite files (may appear outside .work/ during dev)
+*.db
+*.db-wal
+*.db-shm
+
+# Local environment overrides
+.env.local
+
 # Logs
 .logs/
 

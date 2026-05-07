@@ -1,0 +1,97 @@
+name: "PRD-013: React App Shell + Kanban Board"
+description: "Implement the React/Vite SPA — app shell with routing, and a Kanban board that displays ChangeSets grouped by status, receives live updates via SSE, and allows basic status actions."
+area: external-frontend
+goal: >
+  Implement the React/Vite SPA with: an app shell (routing, navigation,
+  SSE connection), a Kanban board showing ChangeSets grouped by status
+  column, real-time updates as SSE events arrive, and an Approve/Reject
+  action on ChangeSet cards (for HITL-enabled ChangeSets in
+  awaiting_human_approval status).
+
+output_format: |
+  - ui/                                 — New directory at repo root
+  - ui/package.json                     — Vite + React + TypeScript + Tailwind
+  - ui/vite.config.ts                   — Proxy /api and /events to localhost:4000
+  - ui/src/App.tsx                      — Root component with router
+  - ui/src/pages/KanbanBoard.tsx        — Kanban board page
+  - ui/src/components/ChangeSetCard.tsx — Card component
+  - ui/src/hooks/useSSE.ts              — SSE subscription hook
+  - ui/src/hooks/useChangeSets.ts       — Data fetching hook
+  - ui/src/types.ts                     — Re-exports Zod-inferred types from backend
+
+constraints: |
+  - Framework: React 18 + Vite 5 + TypeScript (strict mode).
+  - Styling: Tailwind CSS v3. No component library (shadcn/ui is optional,
+    but do not add it unless needed — keep dependencies minimal).
+  - State management: React Query (TanStack Query v5) for server state.
+    No Redux, no Zustand.
+  - Routing: React Router v6 (hash router for simplicity — no server config needed).
+  - Kanban columns (in order): draft | planned | implementing | reviewing |
+    changes_requested | approved | merged | abandoned. Show only non-empty columns
+    unless user toggles "show all."
+  - useSSE hook:
+      - Connects to http://localhost:4000/events/stream via EventSource.
+      - On SSE event of type "change_set_updated" or "change_set_created":
+        invalidate React Query cache for change-sets.
+      - Reconnects with exponential backoff on disconnect (max 30s).
+  - ChangeSetCard shows: title, ID (chg_XXXXXX), status badge, check run
+    summary (pass/fail/pending counts), blocking comment count, created_at
+    relative timestamp.
+  - Kanban board is read-only for status except:
+      - HITL gate pending (status "awaiting_human_approval"): show Approve / Reject buttons.
+      - These call POST /api/approvals/:id/approve or /reject.
+  - Vite proxy: all /api/* and /events/* requests proxied to http://localhost:4000
+    so there are no CORS issues in development.
+  - ui/ has its own package.json and node_modules (not a Bun workspace member —
+    use npm or bun for the ui/ separately).
+  - Do NOT embed the React app in the MCP server. The UI is a standalone dev server.
+
+failure_conditions: |
+  - SSE connection is not re-established after disconnect (requires reconnect logic).
+  - Kanban board does not update when a ChangeSet status changes via SSE.
+  - The UI makes direct requests to port 4000 from the browser without the Vite proxy
+    (CORS error in browser).
+  - Approve button appears on ChangeSets that are not in awaiting_human_approval status.
+  - TypeScript strict mode errors are present in the UI codebase.
+
+acceptance: |
+  - Criterion: `cd ui && bun run dev` starts Vite dev server at http://localhost:5173.
+    Verification: `curl -s http://localhost:5173 | grep -i 'vite'` (or opens in browser
+    without 404).
+
+  - Criterion: Kanban board renders ChangeSet cards from REST API.
+    Verification: With the API server running and at least one ChangeSet in DB,
+    open http://localhost:5173 in browser; ChangeSet card appears in correct column.
+
+  - Criterion: Creating a ChangeSet via REST API updates the Kanban in <2 seconds.
+    Verification: Manual test: POST to /api/change-sets; Kanban refreshes without
+    page reload within 2 seconds.
+
+  - Criterion: Approve button appears on awaiting_human_approval cards.
+    Verification: Set a ChangeSet to awaiting_human_approval via DB; card shows
+    Approve / Reject buttons.
+
+  - Criterion: `cd ui && bun run typecheck` exits 0.
+    Verification: `cd ui && bun run typecheck` exits with code 0 (no type errors).
+
+  - Criterion: `cd ui && bun run build` produces a dist/ directory.
+    Verification: `cd ui && bun run build && ls ui/dist/index.html` returns the file.
+
+out_of_scope: |
+  - Diff viewer (PRD-014).
+  - Agent stream panel (PRD-015).
+  - Authentication / login screen.
+  - Mobile responsiveness.
+  - Dark mode.
+
+reuse_map: |
+  - Consumes: PRD-004 REST API endpoints + SSE event bus.
+  - Consumes: PRD-006 HITL approval endpoints.
+  - Extended by: PRD-014 (adds ChangeSet detail route + diff viewer).
+  - Extended by: PRD-015 (adds agent stream panel component).
+  - Type source: ui/src/types.ts mirrors Zod schemas from src/domain/*.ts.
+
+decisions_cited:
+  - DEC-002  # React SPA (Vite + TypeScript)
+
+backlog_ref: none

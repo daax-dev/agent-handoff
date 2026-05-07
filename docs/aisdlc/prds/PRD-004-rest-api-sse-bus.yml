@@ -1,0 +1,99 @@
+name: "PRD-004: REST API Server + SSE Event Bus"
+description: "Add a Bun HTTP server on port 4000 with REST endpoints for ChangeSet/Task CRUD and a persistent SSE stream that broadcasts all state-change events to UI subscribers."
+area: backend
+goal: >
+  Stand up a Bun HTTP server (separate from the MCP stdio process) on
+  port 4000, exposing REST endpoints for the ChangeSet and Task domain
+  objects and a /events/stream SSE endpoint. The React SPA (PRD-013)
+  reads data via REST and receives live updates via SSE.
+
+output_format: |
+  - src/api/server.ts                — Bun.serve() entry point, route registration
+  - src/api/routes/change-sets.ts   — CRUD endpoints for change_sets
+  - src/api/routes/tasks.ts         — CRUD endpoints for tasks
+  - src/api/routes/events.ts        — SSE stream endpoint
+  - src/api/sse.ts                  — SSEBroadcaster singleton (emit to all subscribers)
+  - src/api/middleware.ts           — CORS, JSON parsing, request logging
+  - src/__tests__/api.test.ts       — Integration tests (in-process Bun.serve)
+  - scripts/dev.ts                  — Starts MCP server + API server concurrently
+
+constraints: |
+  - The REST API server is a SEPARATE Bun.serve() instance from the MCP stdio
+    server. They share the same SQLite DB. The MCP server must NOT expose HTTP
+    (DEC-001: keep MCP stdio-only).
+  - Port: 4000 (configurable via PORT env var).
+  - CORS: allow localhost:5173 (Vite dev server) and localhost:4000.
+  - SSE endpoint: GET /events/stream
+    - Content-Type: text/event-stream
+    - Connection: keep-alive
+    - Each event: data: <JSON>\n\n
+    - Event shape: { type: string, payload: Record<string, unknown>, ts: string }
+    - On disconnect, remove subscriber from SSEBroadcaster without crash.
+  - REST endpoints (minimum set for MVP-2):
+    - GET  /api/change-sets               → list all
+    - POST /api/change-sets               → create
+    - GET  /api/change-sets/:id           → get one
+    - PATCH /api/change-sets/:id/status   → transition status (calls FSM in MVP-3; direct DB update in MVP-2)
+    - GET  /api/tasks                     → list all
+    - POST /api/tasks                     → create
+    - GET  /api/tasks/:id                 → get one
+    - GET  /api/health                    → { ok: true, ts: "..." }
+  - All responses: JSON with Content-Type application/json.
+  - All error responses: { error: string, code: string } with appropriate HTTP status.
+  - Log-file tailing → SSE: SSEBroadcaster has a watchLog(taskId) method that
+    uses Bun's fs.watch to tail .work/logs/TSK-XXXXXX.log and emit
+    { type: "agent_output", payload: { taskId, line, ts } } events.
+
+failure_conditions: |
+  - The MCP stdio server stops working when the REST API server starts.
+  - SSE connection stays open after client disconnects (memory leak).
+  - PATCH /api/change-sets/:id/status bypasses FSM validation in MVP-3
+    (when FSM is available, the route must call FSMEngine.transition(), not
+    write directly to DB).
+  - log-file watcher emits duplicate lines on rapid write bursts.
+  - Missing CORS headers cause the React SPA to fail on first load.
+
+acceptance: |
+  - Criterion: GET /api/health returns 200 with { ok: true }.
+    Verification: `curl -s http://localhost:4000/api/health | jq '.ok'` returns true.
+
+  - Criterion: POST /api/change-sets creates and returns a ChangeSet.
+    Verification: `curl -s -X POST http://localhost:4000/api/change-sets \
+      -H 'Content-Type: application/json' \
+      -d '{"title":"test","taskId":"TSK_000001","targetBranch":"main"}' | jq '.id'`
+    returns "chg_000001".
+
+  - Criterion: GET /api/change-sets returns array including the created ChangeSet.
+    Verification: `curl -s http://localhost:4000/api/change-sets | jq 'length'` >= 1.
+
+  - Criterion: SSE stream emits an event when a ChangeSet is created.
+    Verification: `bun test src/__tests__/api.test.ts` — SSE event test passes
+    (connect to /events/stream, create a ChangeSet, assert event received within 1s).
+
+  - Criterion: Agent log lines appear in SSE stream within 500ms of being written.
+    Verification: `bun test src/__tests__/api.test.ts` — log-tail SSE test passes.
+
+  - Criterion: SSEBroadcaster has 0 subscribers after all clients disconnect.
+    Verification: `bun test src/__tests__/api.test.ts` — cleanup test passes.
+
+  - Criterion: MCP server continues to handle stdio tool calls with REST API running.
+    Verification: `bun test src/__tests__/api.test.ts` — concurrent MCP + REST test passes.
+
+out_of_scope: |
+  - Authentication / authorization (single-developer local tool).
+  - HTTPS (localhost only).
+  - React SPA (PRD-013).
+  - FSM integration in PATCH status endpoint (PRD-005 — MVP-3 wires this up).
+  - Review comment or check run endpoints (PRD-010, PRD-011).
+
+reuse_map: |
+  - Extends: src/job-store.ts — REST API imports ChangeSet CRUD from PRD-001 domain.
+  - Pattern: src/logger.ts JSONL append — same Bun.file() pattern for log-tail watcher.
+  - Referenced by: PRD-013 (React SPA consumes these endpoints).
+
+decisions_cited:
+  - DEC-002  # React SPA visualization (REST + SSE feeds it)
+  - DEC-008  # Tmux + log-tail SSE as peers
+  - DEC-007  # MVP-2
+
+backlog_ref: none

@@ -1,0 +1,90 @@
+name: "PRD-006: HITL Gate System"
+description: "Implement HITLGate — configurable human-in-the-loop checkpoints that pause FSM transitions and wait for explicit human approval or rejection before proceeding."
+area: backend
+goal: >
+  Implement a HITLGate layer on top of FSMEngine that intercepts configured
+  triggers, pauses the ChangeSet in an awaiting_human_approval status,
+  notifies the human (SSE event + optional desktop notification), and
+  resumes or rejects the transition when the human responds via the REST API
+  or localsdlc CLI.
+
+output_format: |
+  - src/fsm/hitl.ts                   — HITLGate class, gate config interface
+  - src/fsm/hitl-config.ts            — Default gate configuration
+  - migrations/003_hitl.sql           — hitl_approvals table
+  - src/api/routes/approvals.ts       — POST /api/approvals/:id/{approve,reject}
+  - src/__tests__/hitl.test.ts        — Unit + integration tests
+
+constraints: |
+  - HITLGate wraps FSMEngine. FSMEngine.transition() is unchanged; HITLGate
+    intercepts BEFORE calling FSMEngine.transition() for configured triggers.
+  - Gate configuration (hitl-config.ts) specifies which triggers require
+    human approval. Default configuration:
+      gated_triggers:
+        - "approve"              # reviewing → approved requires human OK
+        - "merge"                # approved → merged requires human OK
+        - "escalated"            # circuit breaker — always requires human
+  - When a gated trigger is requested:
+      1. FSM status → "awaiting_human_approval" (new status in enum).
+      2. hitl_approvals row inserted: { id, change_set_id, trigger, requested_at, decided_at, decision, decided_by }.
+      3. SSE event emitted: { type: "hitl_requested", changeSetId, trigger, approvalId }.
+      4. HITLGate.transition() returns { status: "pending", approvalId } without
+         calling FSMEngine.transition().
+  - Human responds via:
+      POST /api/approvals/:approvalId/approve  → decision = "approved"
+      POST /api/approvals/:approvalId/reject   → decision = "rejected", requires body { reason: string }
+  - On approve: HITLGate calls FSMEngine.transition(changeSetId, trigger) — FSM proceeds normally.
+  - On reject: FSM transitions to "changes_requested" (reviewer-level rejection) or
+    "abandoned" if trigger was "merge" and human chose to abandon.
+  - "awaiting_human_approval" is a valid ChangeSet status that blocks all
+    other agent-initiated transitions (agents calling MCP tools are rejected with
+    HITLPendingError while gate is open).
+  - HITL gates are disabled by default during MVP-1 through MVP-5 testing
+    (env var LOCALSDLC_HITL_ENABLED=false skips all gates; default false until MVP-6).
+  - Desktop notification: if `terminal-notifier` is available on PATH, run it
+    with the gate request message. Non-fatal if absent.
+
+failure_conditions: |
+  - An agent MCP tool call succeeds while a HITL gate is pending (must be blocked).
+  - Approving a non-existent approvalId does not return 404.
+  - The FSM transitions to approved without writing an approval record
+    when HITL is enabled.
+  - HITL_ENABLED=false allows gates to be skipped in production mode
+    (MVP-6 must default HITL_ENABLED=true).
+
+acceptance: |
+  - Criterion: With HITL_ENABLED=true, "approve" trigger pauses in awaiting_human_approval.
+    Verification: `bun test src/__tests__/hitl.test.ts` — gate test:
+    trigger "approve"; assert status is "awaiting_human_approval" and hitl_approvals row exists.
+
+  - Criterion: POST /api/approvals/:id/approve resumes the FSM.
+    Verification: `bun test src/__tests__/hitl.test.ts` — approval test:
+    approve; assert status transitions to "approved".
+
+  - Criterion: POST /api/approvals/:id/reject transitions to changes_requested.
+    Verification: `bun test src/__tests__/hitl.test.ts` — rejection test:
+    reject with { reason: "security concern" }; status is "changes_requested".
+
+  - Criterion: Agent MCP tool call fails with HITLPendingError while gate is open.
+    Verification: `bun test src/__tests__/hitl.test.ts` — block test:
+    attempt FSM transition via MCP tool while gate pending; assert HITLPendingError.
+
+  - Criterion: HITL_ENABLED=false skips all gates (development mode).
+    Verification: `LOCALSDLC_HITL_ENABLED=false bun test src/__tests__/hitl.test.ts`
+    — all gate tests pass without awaiting_human_approval status.
+
+out_of_scope: |
+  - UI approval panel (PRD-013 adds an Approve/Reject button to the Kanban card).
+  - Slack / email notifications (out of scope for this system entirely).
+  - Multi-approver workflows (single developer, single approval).
+
+reuse_map: |
+  - Wraps: PRD-005 FSMEngine.
+  - Integrates: PRD-004 SSEBroadcaster for HITL events.
+  - Used by: PRD-016 localsdlc CLI (`localsdlc approve` calls POST /api/approvals/:id/approve).
+
+decisions_cited:
+  - DEC-001  # FSM — HITL as a first-class state (from LangGraph concepts)
+  - DEC-007  # MVP-6
+
+backlog_ref: none

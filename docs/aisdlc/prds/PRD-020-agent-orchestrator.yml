@@ -1,0 +1,116 @@
+name: "PRD-020: Agent Orchestrator — Assignment, Lifecycle, and Dispatch"
+description: "A configuration-driven system that maps FSM states to specific CLI tools (Claude Code, Codex, Copilot, Aider, human), supports both pre-spawned persistent sessions and on-demand spawn, and handles subscription-based authentication — no API keys."
+area: backend
+goal: >
+  Every FSM state transition that requires an agent must:
+  (1) know which tool is configured to handle it,
+  (2) either dispatch to an already-running agent session OR spawn a new one,
+  (3) pass a complete handoff context (from HandoffContextBuilder) to that agent,
+  (4) survive tool-specific authentication flows (subscription CLIs, not API keys).
+
+  The system must be configurable without code changes — changing which tool handles
+  "implementing" from Claude Code to Codex is a database update, not a deploy.
+
+output_format: |
+  - migrations/007_agent_assignments.sql  — agent_assignments table + defaults
+  - migrations/008_agent_sessions.sql     — agent_sessions table (pre-spawn registry)
+  - src/domain/agent-assignment.ts        — CRUD for agent_assignments
+  - src/domain/agent-session.ts           — Session registry (connect / heartbeat / disconnect)
+  - src/orchestrator/index.ts             — AgentOrchestrator: decides spawn vs dispatch
+  - src/orchestrator/spawner.ts           — SpawnStrategy: per-tool CLI invocation
+  - src/orchestrator/dispatcher.ts        — DispatchStrategy: push to waiting session
+  - src/api/routes/agent-assignments.ts   — GET/PUT /api/agent-assignments
+  - src/api/routes/agent-sessions.ts      — GET /api/agent-sessions (read-only status)
+  - src/mcp-tools/claim-task.ts           — New MCP tool: agent registers + claims next task
+  - src/__tests__/orchestrator.test.ts    — Unit tests
+
+constraints: |
+  TOOL REGISTRY:
+  Supported tools and their invocation patterns:
+    claude-code:   spawn `claude --dangerously-skip-permissions -p "<prompt>"`
+    codex:         spawn `codex "<prompt>"`
+    copilot-cli:   spawn `gh copilot suggest "<prompt>"`  (limited; see note)
+    aider:         spawn `aider --yes-always --message "<prompt>" <files>`
+    human:         no spawn; emit SSE hitl_requested; wait for /api/approvals endpoint
+
+  All CLI tools authenticate via stored system credentials (OAuth tokens, keychain entries).
+  NO API keys. The system MUST NOT accept or store API keys.
+
+  LIFECYCLE MODES — both must be supported:
+  Mode A — On-Demand Spawn:
+    When FSM enters state S, look up assignment for S, spawn the tool, pass context via
+    stdin/env/file (tool-dependent), tail stdout to task log, wait for exit or MCP call.
+
+  Mode B — Pre-Spawned Session (Subscription-efficient):
+    An agent (e.g. Claude Code running --dangerously-skip-permissions) connects to the
+    local MCP server and calls `claim_task` to announce readiness and pick up work.
+    The orchestrator PREFERS a waiting session over spawning a new one.
+    Sessions register with { toolName, roles[], status: waiting|busy|done }.
+    A heartbeat MCP tool call every 30s keeps the session alive.
+    Timed-out sessions (>90s no heartbeat) are marked disconnected.
+
+  SESSION REGISTRY:
+    agent_sessions table:
+      id, tool, roles (JSON array), status (waiting|busy|done|disconnected),
+      connected_at, last_heartbeat, current_change_set_id (nullable)
+    Sessions are in-memory + persisted for crash recovery.
+
+  DISPATCH LOGIC (in order):
+    1. Is there a waiting session for the required role? → dispatch (Mode B).
+    2. Is spawn configured for this tool? → spawn (Mode A).
+    3. Is tool = "human"? → emit HITL event, block.
+    4. No tool configured or all options unavailable? → emit warning SSE, no-op.
+
+  HANDOFF DELIVERY:
+    On-Demand: write context to .work/tasks/<id>/handoff.md, pass path as CLI arg or env.
+    Pre-Spawned: session calls `claim_task` MCP tool, receives full context in response.
+
+  SPAWN SAFETY:
+    One agent per ChangeSet per state. If an agent is already running for a ChangeSet,
+    do not spawn a second. Track running spawns in agent_sessions table.
+
+  DEFAULT ASSIGNMENTS (seeded by migration 007):
+    implementing   → implementer role   → claude-code
+    reviewing      → reviewer role      → claude-code
+    reviewing      → security_reviewer  → claude-code
+    planned        → planner role       → claude-code
+    changes_requested → fixer role      → claude-code
+    merged         → summarizer role    → claude-code
+
+failure_conditions: |
+  - A second agent is spawned for a ChangeSet that already has one running.
+  - API keys appear anywhere in the codebase, config, or database.
+  - A pre-spawned session is not preferred over spawning when it is waiting.
+  - Tool invocation fails silently — must log to task log and emit error SSE event.
+  - Session heartbeat timeout leaves a dangling "busy" session blocking new work.
+
+acceptance: |
+  - Criterion: Assignment table is seeded with defaults and readable via API.
+    Verification: GET /api/agent-assignments returns 6+ default rows.
+
+  - Criterion: On-demand spawn delivers context.
+    Verification: `bun test src/__tests__/orchestrator.test.ts` — spawn test:
+    trigger FSM to "implementing", assert .work/tasks/<id>/handoff.md is written.
+
+  - Criterion: Pre-spawned session is preferred.
+    Verification: `bun test src/__tests__/orchestrator.test.ts` — dispatch test:
+    register a mock waiting session via claim_task, trigger FSM, assert session
+    receives dispatch and no new process is spawned.
+
+  - Criterion: No API keys anywhere.
+    Verification: `grep -r "api.key\|apiKey\|OPENAI_API\|ANTHROPIC_API" src/` returns empty.
+
+  - Criterion: `bun run typecheck` exits 0 with new modules.
+    Verification: TypeScript strict mode passes.
+
+out_of_scope: |
+  - Agent capability negotiation (all agents assumed capable of all roles for now).
+  - Multi-agent parallelism within a single ChangeSet (one at a time per state).
+  - Remote agent sessions over network (local machine only for MVP).
+  - Cost tracking or token budgeting.
+
+reuse_map: |
+  - Consumes: PRD-009 HandoffContextBuilder (builds the context delivered to agents).
+  - Consumes: PRD-005 FSMEngine (hooks into post-transition).
+  - Consumed by: PRD-006 HITL gate (human tool type).
+  - Consumed by: PRD-021 Agent Settings UI.

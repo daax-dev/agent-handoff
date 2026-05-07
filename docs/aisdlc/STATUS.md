@@ -1,0 +1,73 @@
+# PRD Implementation Status
+
+## Done — Implemented + Tested
+
+| PRD | Name | Test file | Tests |
+|-----|------|-----------|-------|
+| 001 | ChangeSet Domain Model | `src/__tests__/changeset.test.ts` | 30 |
+| 002 | Worktree Manager | `src/__tests__/worktree.test.ts` | 12 |
+| 003 | Spec/Plan Persistence | `src/__tests__/spec-store.test.ts` | 21 |
+| 004 | REST API + SSE Bus | `src/__tests__/api.test.ts` | 17 |
+| 005 | FSM Engine | `src/__tests__/fsm.test.ts` | 16 |
+| 006 | HITL Gate System | `src/__tests__/hitl.test.ts` | 13 |
+| 007 | MCP Tools Extension | `src/__tests__/mcp-tools.test.ts` | 14 |
+| 008 | Agent Role Registry | `src/__tests__/registry.test.ts` | 10 |
+| 009 | Handoff Context Builder | `src/__tests__/handoff-context.test.ts` | 14 |
+| 010 | Review Comment System | `src/__tests__/review-comments.test.ts` | 15 |
+| 011 | Check Runner | `src/__tests__/check-runner.test.ts` | 7 |
+| 012 | Per-Task Decision Log | `src/__tests__/decisions.test.ts` | 13 |
+| 015 | Live Agent Stream Panel | `ui/src/__tests__/StreamPanel.test.tsx` | 3 |
+| 016 | localsdlc CLI | _(acceptance: `bun run src/cli/localsdlc.ts --help`)_ | — |
+| 017 | GitHub Bridge | `src/__tests__/bridge.test.ts` | 12 |
+| 019 | Theme + Visual Redesign | _(visual: `bun run dev:web` → dark/light toggle)_ | — |
+| 020 | Agent Orchestrator | `src/__tests__/orchestrator.test.ts` | 18 |
+| 021 | Agent Settings UI | _(visual: /settings → Agent Assignments + Live Sessions)_ | — |
+| 022 | Clean Install + Dev Setup | `src/__tests__/setup.test.ts` | 12 |
+
+**306 tests total — `bun test` runs everything.**
+
+## Done — Implemented, Visual Verification Only
+
+| PRD | Name | How to verify |
+|-----|------|--------------|
+| 013 | React App Shell + Kanban | `bun run dev:web` → Kanban loads with dark/light theme |
+| 014 | Diff Viewer + Inline Comments | Open a ChangeSet → Diff tab |
+| 019 | Theme + Visual Redesign | Dark/light toggle in nav, Vercel-style CSS |
+| 021 | Agent Settings UI | /settings → Agent Assignments + Live Sessions tabs |
+
+## Run Tests
+
+```bash
+# All tests
+bun test
+
+# Individual PRD
+bun test src/__tests__/changeset.test.ts       # PRD-001
+bun test src/__tests__/worktree.test.ts        # PRD-002
+bun test src/__tests__/spec-store.test.ts      # PRD-003
+bun test src/__tests__/api.test.ts             # PRD-004
+bun test src/__tests__/fsm.test.ts             # PRD-005
+bun test src/__tests__/hitl.test.ts            # PRD-006
+bun test src/__tests__/mcp-tools.test.ts       # PRD-007
+bun test src/__tests__/registry.test.ts        # PRD-008
+bun test src/__tests__/handoff-context.test.ts # PRD-009
+bun test src/__tests__/review-comments.test.ts # PRD-010
+bun test src/__tests__/check-runner.test.ts    # PRD-011
+bun test src/__tests__/decisions.test.ts       # PRD-012
+bun test ui/src/__tests__/StreamPanel.test.tsx # PRD-015
+bun test src/__tests__/bridge.test.ts          # PRD-017
+bun test src/__tests__/orchestrator.test.ts    # PRD-020
+bun test src/__tests__/setup.test.ts           # PRD-022
+
+# Typechecks
+bun run typecheck         # backend
+cd ui && bun run typecheck  # frontend
+
+# CLI acceptance
+bun run src/cli/localsdlc.ts --help
+bun run src/cli/localsdlc.ts init
+```
+
+## Manual Acceptance — PRD-022 (Clean Install)
+
+Run `scripts/verify.sh` from the repo root. See that file for what each step checks.

@@ -1,0 +1,81 @@
+name: "PRD-008: Agent Role Registry"
+description: "Implement a YAML-based agent role registry that maps each role (planner, implementer, security_reviewer, etc.) to a Claude model ID and a prompt template, with env-var override support."
+area: backend
+goal: >
+  Implement AgentRoleRegistry — reads agent-roles.yaml at startup, exposes
+  a getRoleConfig(role) function that returns the model ID and prompt template
+  path for a given role, and supports env-var overrides. The existing
+  handoff_task MCP tool must be updated to accept a role parameter that
+  routes to the correct model.
+
+output_format: |
+  - src/roles/agent-roles.yaml          — Role → model + prompt template config
+  - src/roles/registry.ts               — AgentRoleRegistry class
+  - src/roles/prompts/                  — Directory of role prompt templates (8 files)
+  - src/__tests__/registry.test.ts      — Unit tests
+
+constraints: |
+  - agent-roles.yaml must define all 8 roles from plan.md:
+      planner, implementer, test_agent, reviewer, security_reviewer,
+      architecture_reviewer, fixer, summarizer
+  - Default models (from DEC-013):
+      security_reviewer: claude-opus-4-7
+      architecture_reviewer: claude-opus-4-7
+      planner: claude-sonnet-4-6
+      implementer: claude-sonnet-4-6
+      reviewer: claude-sonnet-4-6
+      fixer: claude-sonnet-4-6
+      test_agent: claude-haiku-4-5-20251001
+      summarizer: claude-haiku-4-5-20251001
+  - Env override pattern: LOCALSDLC_MODEL_<ROLE_UPPER>=<model_id>
+      Example: LOCALSDLC_MODEL_SECURITY_REVIEWER=claude-sonnet-4-6
+  - AgentRoleRegistry.getRoleConfig(role) returns { model: string, promptPath: string }
+      or throws UnknownRoleError if role is not defined.
+  - Prompt templates are Markdown files. They must include a placeholder
+    {{handoff_context}} that the HandoffContext builder populates at dispatch time.
+  - The existing handoff_task MCP tool is updated to accept an optional
+    agentRole parameter. If provided, AgentRoleRegistry overrides the model
+    field in the dispatch payload.
+  - Prompt templates for this PRD may be minimal stubs — one sentence per role
+    is sufficient. Full prompt engineering is out of scope.
+
+failure_conditions: |
+  - getRoleConfig("unknown_role") does not throw (should throw UnknownRoleError).
+  - Env override is silently ignored (LOCALSDLC_MODEL_PLANNER env var has no effect).
+  - agent-roles.yaml is loaded on every tool call (should be loaded once at startup).
+  - The prompt template file referenced in the YAML does not exist at startup
+    (should throw at startup, not at dispatch time).
+
+acceptance: |
+  - Criterion: getRoleConfig("security_reviewer").model returns "claude-opus-4-7" by default.
+    Verification: `bun test src/__tests__/registry.test.ts` — default model test passes.
+
+  - Criterion: LOCALSDLC_MODEL_SECURITY_REVIEWER env var overrides the model.
+    Verification: `LOCALSDLC_MODEL_SECURITY_REVIEWER=claude-sonnet-4-6 bun test src/__tests__/registry.test.ts`
+    — env override test: getRoleConfig("security_reviewer").model returns "claude-sonnet-4-6".
+
+  - Criterion: getRoleConfig("nonexistent") throws UnknownRoleError.
+    Verification: `bun test src/__tests__/registry.test.ts` — unknown role test passes.
+
+  - Criterion: All 8 prompt template files exist and contain {{handoff_context}}.
+    Verification: `bun test src/__tests__/registry.test.ts` — template existence test passes.
+
+  - Criterion: handoff_task MCP tool with agentRole="security_reviewer" dispatches
+    with model "claude-opus-4-7".
+    Verification: `bun test src/__tests__/mcp-tools.test.ts` — role routing test:
+    handoff_task payload model field is "claude-opus-4-7".
+
+out_of_scope: |
+  - Prompt engineering / content of prompt templates (stubs only in this PRD).
+  - Dynamic role addition at runtime (static YAML only).
+  - Multi-model provider support (Claude only for all roles).
+
+reuse_map: |
+  - Extends: src/tools/handoff-task.ts — add agentRole parameter.
+  - Used by: PRD-009 HandoffContext builder (reads role prompt template).
+  - Used by: PRD-007 MCP tools (dispatch agents by role via handoff_task).
+
+decisions_cited:
+  - DEC-013  # Per-role model config in agent-roles.yaml
+
+backlog_ref: none
