@@ -35,7 +35,7 @@ export async function importIssueCmd(url: string) {
 
   const issue = JSON.parse(res.stdout) as GhIssue;
 
-  const cs = await api.post<ChangeSet>("/api/change-sets", {
+  const cs = await api.post<ChangeSet>("/api/change-sets/from-github-issue", {
     title: issue.title,
     description: `Imported from GitHub issue ${url}`,
     githubIssueUrl: url,

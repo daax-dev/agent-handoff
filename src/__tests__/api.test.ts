@@ -123,6 +123,216 @@ describe("ChangeSet REST API", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Quick-create endpoint (localsdlc new command)
+// ---------------------------------------------------------------------------
+
+describe("POST /api/change-sets/quick-create", () => {
+  test("creates a ChangeSet with auto-generated IDs from title only", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/quick-create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Add dark mode" }),
+    });
+    expect(res.status).toBe(201);
+    const cs = await getJson<{
+      id: string; task_id: string; source_branch: string; worktree_path: string;
+    }>(res);
+    expect(cs.id).toMatch(/^chg_\d{6}$/);
+    expect(cs.task_id).toMatch(/^TSK_\d{6}$/);
+    expect(cs.source_branch).toMatch(/^feat\/tsk-\d{6}$/);
+    expect(cs.worktree_path).toMatch(/^\.work\/worktrees\/TSK_\d{6}$/);
+  });
+
+  test("returns 400 for missing title", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/quick-create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Status filter on GET /api/change-sets
+// ---------------------------------------------------------------------------
+
+describe("GET /api/change-sets?status=", () => {
+  test("filters by status", async () => {
+    const csRes = await fetch(`${BASE}/api/change-sets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task_id: "TSK_000555",
+        title: "Status filter test",
+        source_branch: "feat/TSK-000555",
+        worktree_path: ".work/worktrees/TSK-000555",
+      }),
+    });
+    const cs = await getJson<{ id: string }>(csRes);
+    const csId = cs.id;
+
+    // Transition to planned
+    await fetch(`${BASE}/api/change-sets/${csId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "planned" }),
+    });
+
+    const planned = await fetch(`${BASE}/api/change-sets?status=planned`);
+    const list = await getJson<{ id: string; status: string }[]>(planned);
+    expect(list.every((cs) => cs.status === "planned")).toBe(true);
+    expect(list.some((cs) => cs.id === csId)).toBe(true);
+
+    const draft = await fetch(`${BASE}/api/change-sets?status=draft`);
+    const draftList = await getJson<{ id: string }[]>(draft);
+    expect(draftList.some((cs) => cs.id === csId)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GitHub issue import endpoint
+// ---------------------------------------------------------------------------
+
+describe("POST /api/change-sets/from-github-issue", () => {
+  let importedId: string;
+
+  test("creates a ChangeSet with auto-generated task_id / branch / worktree", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/from-github-issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Fix login page crash",
+        githubIssueUrl: "https://github.com/example/repo/issues/42",
+        specContent: "## Problem\nLogin page crashes on mobile.",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const cs = await getJson<{
+      id: string; task_id: string; source_branch: string;
+      worktree_path: string; github_issue_url: string; spec_content: string;
+    }>(res);
+    expect(cs.id).toMatch(/^chg_\d{6}$/);
+    expect(cs.task_id).toMatch(/^TSK_\d{6}$/);
+    expect(cs.source_branch).toMatch(/^feat\/tsk-\d{6}$/);
+    expect(cs.worktree_path).toMatch(/^\.work\/worktrees\/TSK_\d{6}$/);
+    expect(cs.github_issue_url).toBe("https://github.com/example/repo/issues/42");
+    expect(cs.spec_content).toBe("## Problem\nLogin page crashes on mobile.");
+    importedId = cs.id;
+  });
+
+  test("returns 400 for missing title", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/from-github-issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ githubIssueUrl: "https://github.com/example/repo/issues/43" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("returns 400 for invalid githubIssueUrl", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/from-github-issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Test", githubIssueUrl: "not-a-url" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("imported ChangeSet appears in GET /api/change-sets", async () => {
+    const res = await fetch(`${BASE}/api/change-sets`);
+    const list = await getJson<{ id: string }[]>(res);
+    expect(list.some((cs) => cs.id === importedId)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// github-pr-url PATCH endpoint
+// ---------------------------------------------------------------------------
+
+describe("PATCH /api/change-sets/:id/github-pr-url", () => {
+  let csId: string;
+
+  test("sets github_pr_url on an existing ChangeSet", async () => {
+    const createRes = await fetch(`${BASE}/api/change-sets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task_id: "TSK_000777",
+        title: "PR URL test",
+        source_branch: "feat/TSK-000777",
+        worktree_path: ".work/worktrees/TSK-000777",
+      }),
+    });
+    const cs = await getJson<{ id: string }>(createRes);
+    csId = cs.id;
+
+    const res = await fetch(`${BASE}/api/change-sets/${csId}/github-pr-url`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://github.com/example/repo/pull/99" }),
+    });
+    expect(res.status).toBe(200);
+    const updated = await getJson<{ github_pr_url: string }>(res);
+    expect(updated.github_pr_url).toBe("https://github.com/example/repo/pull/99");
+  });
+
+  test("returns 404 for unknown ChangeSet", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/chg_999999/github-pr-url`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://github.com/example/repo/pull/100" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("returns 400 when url is missing", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/${csId}/github-pr-url`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR body endpoint
+// ---------------------------------------------------------------------------
+
+describe("GET /api/change-sets/:id/pr-body", () => {
+  let csId: string;
+
+  test("returns markdown PR body for an existing ChangeSet", async () => {
+    const createRes = await fetch(`${BASE}/api/change-sets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task_id: "TSK_000888",
+        title: "PR body test",
+        source_branch: "feat/TSK-000888",
+        worktree_path: ".work/worktrees/TSK-000888",
+      }),
+    });
+    const cs = await getJson<{ id: string }>(createRes);
+    csId = cs.id;
+
+    const res = await fetch(`${BASE}/api/change-sets/${csId}/pr-body`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/markdown");
+    const body = await res.text();
+    expect(body).toContain("## Summary");
+    expect(body).toContain("## Review Results");
+    expect(body).toContain(csId);
+  });
+
+  test("returns 404 for unknown ChangeSet", async () => {
+    const res = await fetch(`${BASE}/api/change-sets/chg_999998/pr-body`);
+    expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task REST endpoints
 // ---------------------------------------------------------------------------
 

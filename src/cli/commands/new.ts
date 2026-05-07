@@ -7,10 +7,9 @@ interface ChangeSet {
   spec_path?: string;
 }
 
-export async function newCmd(title: string, opts: { taskId?: string }) {
-  const cs = await api.post<ChangeSet>("/api/change-sets", {
+export async function newCmd(title: string, _opts: { taskId?: string }) {
+  const cs = await api.post<ChangeSet>("/api/change-sets/quick-create", {
     title,
-    taskId: opts.taskId,
   });
 
   console.log(`Created ${cs.task_id} / ${cs.id}`);

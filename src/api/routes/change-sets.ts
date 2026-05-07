@@ -6,12 +6,18 @@ import {
   listChangeSets,
   updateChangeSet,
   setChangeSetStatus,
+  setGithubPrUrl,
+  importChangeSetFromGitHub,
+  quickCreateChangeSet,
   ChangeSetStatusSchema,
   CreateChangeSetInputSchema,
+  ImportFromGitHubInputSchema,
+  QuickCreateChangeSetInputSchema,
 } from "../../domain/change-set.js";
 import { InvalidTransitionError } from "../../fsm/errors.js";
 import { FSMEngine } from "../../fsm/engine.js";
 import { HITLGate, HITLPendingError } from "../../fsm/hitl.js";
+import { PRBodyBuilder } from "../../bridge/pr-body-builder.js";
 import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
 
@@ -24,9 +30,11 @@ export function changeSetRoutes(
   const url = new URL(req.url);
   const { method } = req;
 
-  // GET /api/change-sets
+  // GET /api/change-sets[?status=<status>]
   if (method === "GET" && path === "/api/change-sets") {
-    return json(listChangeSets(db));
+    const statusFilter = url.searchParams.get("status");
+    const list = listChangeSets(db);
+    return json(statusFilter ? list.filter((cs) => cs.status === statusFilter) : list);
   }
 
   // POST /api/change-sets
@@ -37,6 +45,32 @@ export function changeSetRoutes(
         return badRequest(parsed.error.message);
       }
       const cs = createChangeSet(db, parsed.data);
+      sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
+      return json(cs, 201);
+    }) as unknown as Response;
+  }
+
+  // POST /api/change-sets/quick-create  (new command — title only, auto-generates IDs)
+  if (method === "POST" && path === "/api/change-sets/quick-create") {
+    return req.json().then((body: unknown) => {
+      const parsed = QuickCreateChangeSetInputSchema.safeParse(body);
+      if (!parsed.success) {
+        return badRequest(parsed.error.message);
+      }
+      const cs = quickCreateChangeSet(db, parsed.data);
+      sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
+      return json(cs, 201);
+    }) as unknown as Response;
+  }
+
+  // POST /api/change-sets/from-github-issue
+  if (method === "POST" && path === "/api/change-sets/from-github-issue") {
+    return req.json().then((body: unknown) => {
+      const parsed = ImportFromGitHubInputSchema.safeParse(body);
+      if (!parsed.success) {
+        return badRequest(parsed.error.message);
+      }
+      const cs = importChangeSetFromGitHub(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       return json(cs, 201);
     }) as unknown as Response;
@@ -132,6 +166,36 @@ export function changeSetRoutes(
     if (!cs) return notFound("ChangeSet not found");
     const engine = new FSMEngine(db);
     return json(engine.getHistory(id));
+  }
+
+  // PATCH /api/change-sets/:id/github-pr-url
+  const prUrlMatch = path.match(/^\/api\/change-sets\/(chg_\d{6})\/github-pr-url$/);
+  if (prUrlMatch && method === "PATCH") {
+    const id = prUrlMatch[1];
+    return req.json().then((body: unknown) => {
+      const b = body as Record<string, unknown>;
+      if (typeof b?.url !== "string" || !b.url) {
+        return badRequest("{ url: string } required");
+      }
+      const cs = setGithubPrUrl(db, id, b.url);
+      if (!cs) return notFound("ChangeSet not found");
+      return json(cs);
+    }) as unknown as Response;
+  }
+
+  // GET /api/change-sets/:id/pr-body
+  const prBodyMatch = path.match(/^\/api\/change-sets\/(chg_\d{6})\/pr-body$/);
+  if (prBodyMatch && method === "GET") {
+    const id = prBodyMatch[1];
+    const cs = getChangeSet(db, id);
+    if (!cs) return notFound("ChangeSet not found");
+    try {
+      const builder = new PRBodyBuilder(db);
+      const body = builder.build(id);
+      return new Response(body, { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8" } });
+    } catch (e) {
+      return err(e instanceof Error ? e.message : String(e));
+    }
   }
 
   return null;

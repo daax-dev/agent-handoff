@@ -1,7 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { api } from "../api-client.js";
-import { getDb } from "../../db.js";
-import { PRBodyBuilder } from "../../bridge/pr-body-builder.js";
 
 interface ChangeSet {
   id: string;
@@ -37,11 +35,10 @@ export async function exportCmd(changeSetId: string, opts: { remote?: string; dr
     throw new Error(`ChangeSet must be approved before export (current status: ${cs.status})`);
   }
 
+  const body = await api.getRaw(`/api/change-sets/${changeSetId}/pr-body`);
+
   if (opts.dryRun) {
     console.log(`Would push: ${cs.source_branch} → ${remote}`);
-    const db = getDb();
-    const builder = new PRBodyBuilder(db);
-    const body = builder.build(changeSetId);
     console.log(`\nWould create PR with body:\n${body}`);
     return;
   }
@@ -58,10 +55,6 @@ export async function exportCmd(changeSetId: string, opts: { remote?: string; dr
       process.exit(1);
     }
   }
-
-  const db = getDb();
-  const builder = new PRBodyBuilder(db);
-  const body = builder.build(changeSetId);
 
   const prArgs = [
     "pr", "create",
