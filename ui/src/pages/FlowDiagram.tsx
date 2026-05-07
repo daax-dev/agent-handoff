@@ -20,6 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Save, RotateCcw, Plus, Sun, Moon } from "lucide-react";
+import type { WorkflowMode } from "@/hooks/useWorkflowConfig";
 import { useAgentAssignments } from "@/hooks/useAgentAssignments";
 import {
   useWorkflowConfig,
@@ -30,11 +31,12 @@ import {
 import { fsmNodeTypes, type FSMNodeData } from "@/components/workflow-editor/FSMNode";
 import { fsmEdgeTypes, type FSMEdgeData } from "@/components/workflow-editor/FSMEdge";
 import { TransitionPanel } from "@/components/workflow-editor/TransitionPanel";
+import { NodePanel } from "@/components/workflow-editor/NodePanel";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
-// ── State catalogue ───────────────────────────────────────────────────────────
+// ── State catalogues (one per mode) ──────────────────────────────────────────
 
-const STATE_META: Record<string, { category: StateCategory }> = {
+const CS_STATE_META: Record<string, { category: StateCategory }> = {
   draft:             { category: "active"    },
   planned:           { category: "active"    },
   implementing:      { category: "active"    },
@@ -47,7 +49,7 @@ const STATE_META: Record<string, { category: StateCategory }> = {
   escalated:         { category: "escalated" },
 };
 
-const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
+const CS_DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
   draft:             { x: 0,    y: 150 },
   planned:           { x: 310,  y: 150 },
   implementing:      { x: 620,  y: 150 },
@@ -59,6 +61,46 @@ const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
   escalated:         { x: 940,  y: 540 },
   conflict_detected: { x: 1260, y: 450 },
 };
+
+// GSD v1 phase lifecycle states
+const GSD_STATE_META: Record<string, { category: StateCategory }> = {
+  project_init:       { category: "active"    },
+  roadmap_ready:      { category: "active"    },
+  discussing:         { category: "active"    },
+  planning:           { category: "active"    },
+  plan_ready:         { category: "active"    },
+  executing:          { category: "active"    },
+  verifying:          { category: "active"    },
+  gap_fixing:         { category: "active"    },
+  shipping:           { category: "active"    },
+  phase_done:         { category: "success"   },
+  milestone_complete: { category: "success"   },
+  escalated:          { category: "escalated" },
+};
+
+// Snake layout: row 1 left→right, row 2 right→left, terminal at bottom
+const GSD_DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
+  project_init:       { x: 0,    y: 120 },
+  roadmap_ready:      { x: 240,  y: 120 },
+  discussing:         { x: 480,  y: 120 },
+  planning:           { x: 720,  y: 120 },
+  plan_ready:         { x: 960,  y: 120 },
+  executing:          { x: 1200, y: 120 },
+  verifying:          { x: 1200, y: 380 },
+  gap_fixing:         { x: 960,  y: 380 },
+  shipping:           { x: 720,  y: 380 },
+  phase_done:         { x: 480,  y: 380 },
+  milestone_complete: { x: 240,  y: 380 },
+  escalated:          { x: 600,  y: 620 },
+};
+
+function stateMeta(mode: string): Record<string, { category: StateCategory }> {
+  return mode === "gsd" ? GSD_STATE_META : CS_STATE_META;
+}
+
+function defaultPositions(mode: string): Record<string, { x: number; y: number }> {
+  return mode === "gsd" ? GSD_DEFAULT_POSITIONS : CS_DEFAULT_POSITIONS;
+}
 
 const CIRCUIT_BREAKER_THRESHOLD = 3;
 
@@ -105,20 +147,23 @@ function buildEdges(
     });
   }
 
-  result.push({
-    id: "cb-reviewing-escalated",
-    source: "reviewing",
-    target: "escalated",
-    sourceHandle: "bottom",
-    type: "fsmEdge",
-    markerEnd: { type: MarkerType.ArrowClosed, color: "#b91c1c" },
-    data: {
-      trigger: `circuit_breaker (${CIRCUIT_BREAKER_THRESHOLD}× request_changes)`,
-      isHitl: false,
-      isCircuitBreaker: true,
-    } as FSMEdgeData,
-    selected: "cb-reviewing-escalated" === selectedId,
-  });
+  // Changeset-only: hardcoded circuit-breaker edge
+  if (config.mode !== "gsd") {
+    result.push({
+      id: "cb-reviewing-escalated",
+      source: "reviewing",
+      target: "escalated",
+      sourceHandle: "bottom",
+      type: "fsmEdge",
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#b91c1c" },
+      data: {
+        trigger: `circuit_breaker (${CIRCUIT_BREAKER_THRESHOLD}× request_changes)`,
+        isHitl: false,
+        isCircuitBreaker: true,
+      } as FSMEdgeData,
+      selected: "cb-reviewing-escalated" === selectedId,
+    });
+  }
 
   return result;
 }
@@ -144,7 +189,8 @@ function FlowDiagramInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<FSMNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<FSMEdgeData>>([]);
   const [localConfig, setLocalConfig]    = useState<WorkflowConfig | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId]   = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId]   = useState<string | null>(null);
   const [isDirty, setIsDirty]           = useState(false);
   const [saveError, setSaveError]       = useState<string | null>(null);
   const [showAddState, setShowAddState] = useState(false);
@@ -169,9 +215,11 @@ function FlowDiagramInner() {
     if (!localConfig) return;
     const saved        = localConfig.layout ?? {};
     const customStates = localConfig.states ?? {};
+    const meta         = stateMeta(localConfig.mode);
+    const defPos       = defaultPositions(localConfig.mode);
 
     const allStates: Record<string, { category: StateCategory }> = {
-      ...STATE_META,
+      ...meta,
       ...Object.fromEntries(
         Object.entries(customStates).map(([s, v]) => [s, { category: v.category as StateCategory }])
       ),
@@ -184,7 +232,7 @@ function FlowDiagramInner() {
         return {
           id: state,
           type: "fsmStateNode",
-          position: saved[state] ?? DEFAULT_POSITIONS[state] ?? { x: 0, y: 0 },
+          position: saved[state] ?? defPos[state] ?? { x: 0, y: 0 },
           data: {
             state,
             category,
@@ -349,7 +397,7 @@ function FlowDiagramInner() {
   // ── Add new state node ────────────────────────────────────────────────────
   const existingStates = useMemo(
     () => new Set([
-      ...Object.keys(STATE_META),
+      ...Object.keys(stateMeta(localConfig?.mode ?? "changeset")),
       ...Object.keys(localConfig?.states ?? {}),
       ...(localConfig?.transitions.flatMap((t) => [t.from, t.to]) ?? []),
     ]),
@@ -373,6 +421,19 @@ function FlowDiagramInner() {
     [localConfig]
   );
 
+  // ── Mode toggle ───────────────────────────────────────────────────────────
+  const handleToggleMode = useCallback(async () => {
+    if (!localConfig || saveWorkflow.isPending) return;
+    const newMode: WorkflowMode = localConfig.mode === "gsd" ? "changeset" : "gsd";
+    setSaveError(null);
+    try {
+      await saveWorkflow.mutateAsync({ ...localConfig, mode: newMode });
+      setIsDirty(false);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Mode switch failed");
+    }
+  }, [localConfig, saveWorkflow]);
+
   // ── Save & Reset ──────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!localConfig) return;
@@ -388,9 +449,10 @@ function FlowDiagramInner() {
   const handleResetLayout = useCallback(() => {
     if (!localConfig) return;
     // Only reset built-in states; preserve custom state positions
+    const meta = stateMeta(localConfig.mode);
     const customLayout: Record<string, { x: number; y: number }> = {};
     for (const [id, pos] of Object.entries(localConfig.layout)) {
-      if (!(id in STATE_META)) customLayout[id] = pos;
+      if (!(id in meta)) customLayout[id] = pos;
     }
     setLocalConfig({ ...localConfig, layout: customLayout });
     setIsDirty(true);
@@ -447,6 +509,13 @@ function FlowDiagramInner() {
             <LegendItem color={p.blue}    label="HUMAN required"   solid />
             <LegendItem color="#b91c1c"   label="circuit breaker"  dashed />
           </div>
+
+          {/* Mode toggle */}
+          <ModeToggle
+            mode={localConfig?.mode ?? "changeset"}
+            disabled={saveWorkflow.isPending}
+            onToggle={handleToggleMode}
+          />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -527,8 +596,18 @@ function FlowDiagramInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onReconnect={onReconnect}
-            onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
-            onPaneClick={() => setSelectedEdgeId(null)}
+            onNodeClick={(_, node) => {
+              setSelectedNodeId(node.id);
+              setSelectedEdgeId(null);
+            }}
+            onEdgeClick={(_, edge) => {
+              setSelectedEdgeId(edge.id);
+              setSelectedNodeId(null);
+            }}
+            onPaneClick={() => {
+              setSelectedEdgeId(null);
+              setSelectedNodeId(null);
+            }}
             nodeTypes={fsmNodeTypes}
             edgeTypes={fsmEdgeTypes}
             connectionMode={ConnectionMode.Loose}
@@ -573,12 +652,19 @@ function FlowDiagramInner() {
           </ReactFlow>
         </div>
 
-        {selectedEdge && (
+        {selectedEdge && !selectedNodeId && (
           <TransitionPanel
             edge={selectedEdge as Edge<FSMEdgeData>}
             onUpdate={handleTransitionUpdate}
             onDelete={handleTransitionDelete}
             onClose={() => setSelectedEdgeId(null)}
+          />
+        )}
+
+        {selectedNodeId && !selectedEdge && (
+          <NodePanel
+            fsmState={selectedNodeId}
+            onClose={() => setSelectedNodeId(null)}
           />
         )}
       </div>
@@ -659,6 +745,67 @@ function ToolButton({
     >
       {children}
     </button>
+  );
+}
+
+// ── Mode toggle ───────────────────────────────────────────────────────────────
+
+function ModeToggle({
+  mode,
+  disabled,
+  onToggle,
+}: {
+  mode: WorkflowMode;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const { palette: p } = useTheme();
+  const base: React.CSSProperties = {
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 600,
+    border: "none",
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "background 0.15s, color 0.15s",
+    letterSpacing: "0.04em",
+    opacity: disabled ? 0.5 : 1,
+  };
+  return (
+    <div
+      style={{
+        display: "flex",
+        borderRadius: 6,
+        overflow: "hidden",
+        border: `1px solid ${p.headerBorder}`,
+      }}
+      title="Switch workflow mode"
+    >
+      <button
+        onClick={mode === "gsd" ? onToggle : undefined}
+        disabled={disabled}
+        style={{
+          ...base,
+          background: mode === "changeset" ? p.amber : p.inputBg,
+          color: mode === "changeset" ? "#000" : p.textMuted,
+          borderRight: `1px solid ${p.headerBorder}`,
+          cursor: mode === "changeset" || disabled ? "default" : "pointer",
+        }}
+      >
+        Changeset
+      </button>
+      <button
+        onClick={mode === "changeset" ? onToggle : undefined}
+        disabled={disabled}
+        style={{
+          ...base,
+          background: mode === "gsd" ? p.amber : p.inputBg,
+          color: mode === "gsd" ? "#000" : p.textMuted,
+          cursor: mode === "gsd" || disabled ? "default" : "pointer",
+        }}
+      >
+        GSD
+      </button>
+    </div>
   );
 }
 

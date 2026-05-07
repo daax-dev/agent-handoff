@@ -8,7 +8,10 @@ export interface TransitionDef {
   trigger: string;
 }
 
+export type WorkflowMode = "changeset" | "gsd";
+
 export interface WorkflowConfig {
+  mode: WorkflowMode;
   transitions: TransitionDef[];
   hitlGatedTriggers: string[];
   layout: Record<string, { x: number; y: number }>;

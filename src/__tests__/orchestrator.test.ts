@@ -181,14 +181,14 @@ describe("AgentOrchestrator", () => {
   });
 
   it("returns hitl mode when tool is human", async () => {
-    upsertAssignment(db, "implementing", "implementer", "human");
+    upsertAssignment(db, { fsmState: "implementing", role: "implementer", tool: "human" });
     const orch = new AgentOrchestrator(db, { workRoot });
     const result = await orch.run("chg_001", "implementing", "implementer");
     expect(result.mode).toBe("hitl");
   });
 
   it("prefers dispatching to a waiting session over spawning", async () => {
-    upsertAssignment(db, "implementing", "implementer", "claude-code");
+    upsertAssignment(db, { fsmState: "implementing", role: "implementer", tool: "claude-code" });
     const session = registerSession(db, "claude-code", ["implementer"]);
     const orch = new AgentOrchestrator(db, { workRoot });
     const result = await orch.run("chg_001", "implementing", "implementer");
@@ -198,7 +198,7 @@ describe("AgentOrchestrator", () => {
   });
 
   it("skips when already busy session exists for change set", async () => {
-    upsertAssignment(db, "implementing", "implementer", "claude-code");
+    upsertAssignment(db, { fsmState: "implementing", role: "implementer", tool: "claude-code" });
     const session = registerSession(db, "claude-code", ["implementer"]);
     markBusy(db, session.id, "chg_001");
     const orch = new AgentOrchestrator(db, { workRoot });
@@ -209,7 +209,7 @@ describe("AgentOrchestrator", () => {
   });
 
   it("skips when assignment is disabled", async () => {
-    upsertAssignment(db, "implementing", "implementer", "claude-code", false);
+    upsertAssignment(db, { fsmState: "implementing", role: "implementer", tool: "claude-code", enabled: false });
     const orch = new AgentOrchestrator(db, { workRoot });
     const result = await orch.run("chg_001", "implementing", "implementer");
     expect(result.mode).toBe("skipped");

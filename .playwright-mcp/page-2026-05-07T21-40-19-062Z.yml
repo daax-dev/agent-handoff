@@ -1,0 +1,351 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to light mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e29]:
+    - generic [ref=e288]:
+      - generic [ref=e289]:
+        - generic [ref=e290]:
+          - generic [ref=e291]: FSM Workflow
+          - generic [ref=e292]:
+            - generic [ref=e293]: agent transition
+            - generic [ref=e295]: HUMAN required
+            - generic [ref=e297]: circuit breaker
+          - generic "Switch workflow mode" [ref=e299]:
+            - button "Changeset" [ref=e300] [cursor=pointer]
+            - button "GSD" [ref=e301]
+        - generic [ref=e302]:
+          - button "Switch to light mode" [ref=e303] [cursor=pointer]:
+            - img [ref=e304]
+          - button "Add State" [ref=e310] [cursor=pointer]:
+            - img [ref=e311]
+            - text: Add State
+          - button "Reset layout" [ref=e312] [cursor=pointer]:
+            - img [ref=e313]
+            - text: Reset layout
+          - button "Save" [disabled] [ref=e316]:
+            - img [ref=e317]
+            - text: Save
+      - generic [ref=e321]:
+        - application [ref=e323]:
+          - generic [ref=e325]:
+            - generic:
+              - generic:
+                - img
+                - img:
+                  - group "Edge from project_init to roadmap_ready" [ref=e682] [cursor=pointer]
+                - img:
+                  - group "Edge from roadmap_ready to discussing" [ref=e688] [cursor=pointer]
+                - img:
+                  - group "Edge from roadmap_ready to planning" [ref=e694] [cursor=pointer]
+                - img:
+                  - group "Edge from discussing to planning" [ref=e700] [cursor=pointer]
+                - img:
+                  - group "Edge from planning to plan_ready" [ref=e706] [cursor=pointer]
+                - img:
+                  - group "Edge from plan_ready to executing" [ref=e712] [cursor=pointer]
+                - img:
+                  - group "Edge from executing to verifying" [ref=e718] [cursor=pointer]
+                - img:
+                  - group "Edge from verifying to shipping" [ref=e724] [cursor=pointer]
+                - img:
+                  - group "Edge from verifying to gap_fixing" [ref=e727] [cursor=pointer]
+                - img:
+                  - group "Edge from gap_fixing to verifying" [ref=e733] [cursor=pointer]
+                - img:
+                  - group "Edge from shipping to phase_done" [ref=e739] [cursor=pointer]
+                - img:
+                  - group "Edge from phase_done to discussing" [ref=e745] [cursor=pointer]
+                - img:
+                  - group "Edge from phase_done to milestone_complete" [ref=e751] [cursor=pointer]
+                - img:
+                  - group "Edge from milestone_complete to project_init" [ref=e754] [cursor=pointer]
+              - generic:
+                - generic [ref=e760] [cursor=pointer]:
+                  - generic [ref=e761]: HUMAN
+                  - text: roadmap_approved
+                - generic [ref=e762] [cursor=pointer]: start_phase
+                - generic [ref=e763] [cursor=pointer]: skip_discuss
+                - generic [ref=e764] [cursor=pointer]: decisions_captured
+                - generic [ref=e765] [cursor=pointer]: plans_verified
+                - generic [ref=e766] [cursor=pointer]: start_execution
+                - generic [ref=e767] [cursor=pointer]: execution_complete
+                - generic [ref=e768] [cursor=pointer]:
+                  - generic [ref=e769]: HUMAN
+                  - text: verification_passed
+                - generic [ref=e770] [cursor=pointer]: gaps_found
+                - generic [ref=e771] [cursor=pointer]: gaps_resolved
+                - generic [ref=e772] [cursor=pointer]: pr_created
+                - generic [ref=e773] [cursor=pointer]: start_next_phase
+                - generic [ref=e774] [cursor=pointer]: all_phases_done
+                - generic [ref=e775] [cursor=pointer]:
+                  - generic [ref=e776]: HUMAN
+                  - text: new_milestone
+              - generic:
+                - group [ref=e421]:
+                  - generic [ref=e422]:
+                    - generic [ref=e427]:
+                      - img [ref=e429]
+                      - generic [ref=e431]: project_init
+                    - generic [ref=e432]:
+                      - generic [ref=e433]:
+                        - generic [ref=e434]: pm_planner
+                        - generic [ref=e435]: claude-code
+                      - generic [ref=e436]:
+                        - generic [ref=e437]: researcher
+                        - generic [ref=e438]: claude-code
+                - group [ref=e439]:
+                  - generic [ref=e440]:
+                    - generic [ref=e445]:
+                      - img [ref=e447]
+                      - generic [ref=e449]: roadmap_ready
+                    - generic [ref=e450]:
+                      - img [ref=e451]
+                      - text: no agent — will stall here
+                - group [ref=e453]:
+                  - generic [ref=e454]:
+                    - generic [ref=e459]:
+                      - img [ref=e461]
+                      - generic [ref=e463]: discussing
+                    - generic [ref=e465]:
+                      - generic [ref=e466]: pm_planner
+                      - generic [ref=e467]: claude-code
+                - group [active] [ref=e468]:
+                  - generic [ref=e469]:
+                    - generic [ref=e474]:
+                      - img [ref=e476]
+                      - generic [ref=e478]: planning
+                    - generic [ref=e479]:
+                      - generic [ref=e480]:
+                        - generic [ref=e481]: plan_verifier
+                        - generic [ref=e482]: claude-code
+                      - generic [ref=e483]:
+                        - generic [ref=e484]: planner
+                        - generic [ref=e485]: claude-code
+                      - generic [ref=e486]:
+                        - generic [ref=e487]: researcher
+                        - generic [ref=e488]: claude-code
+                - group [ref=e489]:
+                  - generic [ref=e490]:
+                    - generic [ref=e495]:
+                      - img [ref=e497]
+                      - generic [ref=e499]: plan_ready
+                    - generic [ref=e500]:
+                      - img [ref=e501]
+                      - text: no agent — will stall here
+                - group [ref=e503]:
+                  - generic [ref=e504]:
+                    - generic [ref=e509]:
+                      - img [ref=e511]
+                      - generic [ref=e513]: executing
+                    - generic [ref=e515]:
+                      - generic [ref=e516]: implementer
+                      - generic [ref=e517]: claude-code
+                - group [ref=e518]:
+                  - generic [ref=e519]:
+                    - generic [ref=e524]:
+                      - img [ref=e526]
+                      - generic [ref=e528]: verifying
+                    - generic [ref=e529]:
+                      - generic [ref=e530]:
+                        - generic [ref=e531]: qa_agent
+                        - generic [ref=e532]: claude-code
+                      - generic [ref=e533]:
+                        - generic [ref=e534]: verifier
+                        - generic [ref=e535]: claude-code
+                - group [ref=e536]:
+                  - generic [ref=e537]:
+                    - generic [ref=e542]:
+                      - img [ref=e544]
+                      - generic [ref=e546]: gap_fixing
+                    - generic [ref=e548]:
+                      - generic [ref=e549]: fixer
+                      - generic [ref=e550]: claude-code
+                - group [ref=e551]:
+                  - generic [ref=e552]:
+                    - generic [ref=e557]:
+                      - img [ref=e559]
+                      - generic [ref=e561]: shipping
+                    - generic [ref=e562]:
+                      - generic [ref=e563]:
+                        - generic [ref=e564]: pr_builder
+                        - generic [ref=e565]: claude-code
+                      - generic [ref=e566]:
+                        - generic [ref=e567]: summarizer
+                        - generic [ref=e568]: claude-code
+                - group [ref=e569]:
+                  - generic [ref=e575]:
+                    - img [ref=e577]
+                    - generic [ref=e581]: phase_done
+                    - generic [ref=e582]: TERMINAL
+                - group [ref=e583]:
+                  - generic [ref=e589]:
+                    - img [ref=e591]
+                    - generic [ref=e595]: milestone_complete
+                    - generic [ref=e596]: TERMINAL
+                - group [ref=e597]:
+                  - generic [ref=e603]:
+                    - img [ref=e605]
+                    - generic [ref=e607]: escalated
+                    - generic [ref=e608]: TERMINAL
+          - img
+          - generic "Control Panel" [ref=e609]:
+            - button "Zoom In" [ref=e610] [cursor=pointer]:
+              - img [ref=e611]
+            - button "Zoom Out" [ref=e613] [cursor=pointer]:
+              - img [ref=e614]
+            - button "Fit View" [ref=e616] [cursor=pointer]:
+              - img [ref=e617]
+            - button "Toggle Interactivity" [ref=e619] [cursor=pointer]:
+              - img [ref=e620]
+          - img "Mini Map" [ref=e623]
+          - link "React Flow attribution" [ref=e637] [cursor=pointer]:
+            - /url: https://reactflow.dev
+            - text: React Flow
+        - generic [ref=e789]:
+          - generic [ref=e790]:
+            - generic [ref=e791]:
+              - text: State Config
+              - generic [ref=e792]: planning
+            - button [ref=e793] [cursor=pointer]:
+              - img [ref=e794]
+          - generic [ref=e797]:
+            - generic [ref=e832]:
+              - generic [ref=e833]:
+                - generic [ref=e834]: plan_verifier
+                - generic [ref=e835] [cursor=pointer]:
+                  - checkbox "enabled" [checked] [ref=e836]
+                  - text: enabled
+              - generic [ref=e837]:
+                - generic [ref=e838]:
+                  - generic [ref=e839]: Tool
+                  - combobox [ref=e840] [cursor=pointer]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - generic [ref=e841]:
+                  - generic [ref=e842]: Model
+                  - combobox [ref=e843] [cursor=pointer]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+              - generic [ref=e845] [cursor=pointer]:
+                - generic [ref=e846]: Auto-launch
+                - generic [ref=e847]: Manual spawn only
+              - generic [ref=e850]:
+                - generic [ref=e851]: MCP Servers
+                - generic [ref=e852]:
+                  - textbox "server-name" [ref=e853]
+                  - button "+" [ref=e854] [cursor=pointer]
+                - generic [ref=e855]: Using role defaults
+              - button "Prompt override" [ref=e857] [cursor=pointer]:
+                - img [ref=e858]
+                - text: Prompt override
+            - generic [ref=e860]:
+              - generic [ref=e861]:
+                - generic [ref=e862]: planner
+                - generic [ref=e863] [cursor=pointer]:
+                  - checkbox "enabled" [checked] [ref=e864]
+                  - text: enabled
+              - generic [ref=e865]:
+                - generic [ref=e866]:
+                  - generic [ref=e867]: Tool
+                  - combobox [ref=e868] [cursor=pointer]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - generic [ref=e869]:
+                  - generic [ref=e870]: Model
+                  - combobox [ref=e871] [cursor=pointer]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+              - generic [ref=e873] [cursor=pointer]:
+                - generic [ref=e874]: Auto-launch
+                - generic [ref=e875]: Manual spawn only
+              - generic [ref=e878]:
+                - generic [ref=e879]: MCP Servers
+                - generic [ref=e880]:
+                  - textbox "server-name" [ref=e881]
+                  - button "+" [ref=e882] [cursor=pointer]
+                - generic [ref=e883]: Using role defaults
+              - button "Prompt override" [ref=e885] [cursor=pointer]:
+                - img [ref=e886]
+                - text: Prompt override
+            - generic [ref=e888]:
+              - generic [ref=e889]:
+                - generic [ref=e890]: researcher
+                - generic [ref=e891] [cursor=pointer]:
+                  - checkbox "enabled" [checked] [ref=e892]
+                  - text: enabled
+              - generic [ref=e893]:
+                - generic [ref=e894]:
+                  - generic [ref=e895]: Tool
+                  - combobox [ref=e896] [cursor=pointer]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - generic [ref=e897]:
+                  - generic [ref=e898]: Model
+                  - combobox [ref=e899] [cursor=pointer]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+              - generic [ref=e901] [cursor=pointer]:
+                - generic [ref=e902]: Auto-launch
+                - generic [ref=e903]: Manual spawn only
+              - generic [ref=e906]:
+                - generic [ref=e907]: MCP Servers
+                - generic [ref=e908]:
+                  - textbox "server-name" [ref=e909]
+                  - button "+" [ref=e910] [cursor=pointer]
+                - generic [ref=e911]: Using role defaults
+              - button "Prompt override" [ref=e913] [cursor=pointer]:
+                - img [ref=e914]
+                - text: Prompt override
+          - button "Save" [ref=e917] [cursor=pointer]:
+            - img [ref=e918]
+            - text: Save

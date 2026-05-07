@@ -17,6 +17,8 @@ export function fsmWorkflowRoute(
           return badRequest("transitions must be an array");
         if (!Array.isArray(config?.hitlGatedTriggers))
           return badRequest("hitlGatedTriggers must be an array");
+        if (config.mode !== undefined && config.mode !== "changeset" && config.mode !== "gsd")
+          return badRequest("mode must be 'changeset' or 'gsd'");
         saveWorkflowConfig(config);
         return json({ ok: true });
       } catch (e) {

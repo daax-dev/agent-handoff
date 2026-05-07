@@ -119,6 +119,10 @@ export interface AgentAssignment {
   tool: AgentTool;
   enabled: boolean;
   updated_at: string;
+  model: string | null;
+  prompt_override: string | null;
+  mcps: string[] | null;
+  auto_launch: boolean;
 }
 
 export type SessionStatus = "waiting" | "busy" | "done" | "disconnected";

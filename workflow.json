@@ -1,75 +1,144 @@
 {
-  "transitions": [
-    {
-      "from": "draft",
-      "to": "planned",
-      "trigger": "plan_accepted"
-    },
-    {
-      "from": "planned",
-      "to": "implementing",
-      "trigger": "assign_implementer"
-    },
-    {
-      "from": "implementing",
-      "to": "reviewing",
-      "trigger": "submit_for_review"
-    },
-    {
-      "from": "reviewing",
-      "to": "changes_requested",
-      "trigger": "request_changes"
-    },
-    {
-      "from": "reviewing",
-      "to": "approved",
-      "trigger": "approve"
-    },
-    {
-      "from": "changes_requested",
-      "to": "implementing",
-      "trigger": "pick_up_revision"
-    },
-    {
-      "from": "approved",
-      "to": "conflict_detected",
-      "trigger": "merge_conflict_detected"
-    },
-    {
-      "from": "approved",
-      "to": "merged",
-      "trigger": "merge"
-    },
-    {
-      "from": "conflict_detected",
-      "to": "implementing",
-      "trigger": "conflict_reopen"
-    },
-    {
-      "from": "conflict_detected",
-      "to": "reviewing",
-      "trigger": "conflict_resolved"
-    }
-  ],
-  "hitlGatedTriggers": [
-    "merge"
-  ],
-  "layout": {
-    "broken": {
-      "x": 629.1748526522593,
-      "y": -42.97642436149312
-    },
-    "a": {
-      "x": 691.0609037328094,
-      "y": -146.11984282907662
-    }
+  "mode": "gsd",
+  "changeset": {
+    "transitions": [
+      {
+        "from": "draft",
+        "to": "planned",
+        "trigger": "plan_accepted"
+      },
+      {
+        "from": "planned",
+        "to": "implementing",
+        "trigger": "assign_implementer"
+      },
+      {
+        "from": "implementing",
+        "to": "reviewing",
+        "trigger": "submit_for_review"
+      },
+      {
+        "from": "reviewing",
+        "to": "changes_requested",
+        "trigger": "request_changes"
+      },
+      {
+        "from": "reviewing",
+        "to": "approved",
+        "trigger": "approve"
+      },
+      {
+        "from": "changes_requested",
+        "to": "implementing",
+        "trigger": "pick_up_revision"
+      },
+      {
+        "from": "approved",
+        "to": "conflict_detected",
+        "trigger": "merge_conflict_detected"
+      },
+      {
+        "from": "approved",
+        "to": "merged",
+        "trigger": "merge"
+      },
+      {
+        "from": "conflict_detected",
+        "to": "implementing",
+        "trigger": "conflict_reopen"
+      },
+      {
+        "from": "conflict_detected",
+        "to": "reviewing",
+        "trigger": "conflict_resolved"
+      }
+    ],
+    "hitlGatedTriggers": [
+      "approve",
+      "merge"
+    ],
+    "layout": {},
+    "states": {}
   },
-  "states": {
-    "a": {
-      "category": "active"
-    },
-    "broken": {
-      "category": "success"
-    }
+  "gsd": {
+    "transitions": [
+      {
+        "from": "project_init",
+        "to": "roadmap_ready",
+        "trigger": "roadmap_approved"
+      },
+      {
+        "from": "roadmap_ready",
+        "to": "discussing",
+        "trigger": "start_phase"
+      },
+      {
+        "from": "roadmap_ready",
+        "to": "planning",
+        "trigger": "skip_discuss"
+      },
+      {
+        "from": "discussing",
+        "to": "planning",
+        "trigger": "decisions_captured"
+      },
+      {
+        "from": "planning",
+        "to": "plan_ready",
+        "trigger": "plans_verified"
+      },
+      {
+        "from": "plan_ready",
+        "to": "executing",
+        "trigger": "start_execution"
+      },
+      {
+        "from": "executing",
+        "to": "verifying",
+        "trigger": "execution_complete"
+      },
+      {
+        "from": "verifying",
+        "to": "shipping",
+        "trigger": "verification_passed"
+      },
+      {
+        "from": "verifying",
+        "to": "gap_fixing",
+        "trigger": "gaps_found"
+      },
+      {
+        "from": "gap_fixing",
+        "to": "verifying",
+        "trigger": "gaps_resolved"
+      },
+      {
+        "from": "shipping",
+        "to": "phase_done",
+        "trigger": "pr_created"
+      },
+      {
+        "from": "phase_done",
+        "to": "discussing",
+        "trigger": "start_next_phase"
+      },
+      {
+        "from": "phase_done",
+        "to": "milestone_complete",
+        "trigger": "all_phases_done"
+      },
+      {
+        "from": "milestone_complete",
+        "to": "project_init",
+        "trigger": "new_milestone"
+      }
+    ],
+    "hitlGatedTriggers": [
+      "roadmap_approved",
+      "verification_passed",
+      "new_milestone"
+    ],
+    "layout": {},
+    "states": {}
   }
 }

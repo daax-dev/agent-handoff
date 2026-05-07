@@ -1,0 +1,44 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to dark mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e25]:
+    - generic [ref=e36]:
+      - generic [ref=e37]:
+        - heading "Settings" [level=1] [ref=e38]
+        - paragraph [ref=e39]: Configure the active workflow mode, agent assignments, and monitor live sessions.
+      - generic [ref=e40]:
+        - button "Workflow" [ref=e41] [cursor=pointer]
+        - button "Agents" [active] [ref=e42] [cursor=pointer]
+        - button "Sessions" [ref=e43] [cursor=pointer]
+      - generic [ref=e119]:
+        - generic [ref=e120]:
+          - generic [ref=e122]:
+            - heading "Agent Assignments" [level=3] [ref=e123]
+            - paragraph [ref=e124]: "Mode: gsd — showing 0 assignments"
+          - table [ref=e126]:
+            - rowgroup [ref=e127]:
+              - row "State Role Tool Model Auto-launch Enabled" [ref=e128]:
+                - columnheader "State" [ref=e129]
+                - columnheader "Role" [ref=e130]
+                - columnheader "Tool" [ref=e131]
+                - columnheader "Model" [ref=e132]
+                - columnheader "Auto-launch" [ref=e133]
+                - columnheader "Enabled" [ref=e134]
+                - columnheader [ref=e135]
+            - rowgroup
+          - paragraph [ref=e136]: No assignments for gsd mode.
+        - paragraph [ref=e137]: Click a state node in the FSM diagram to configure prompt overrides and MCP settings.

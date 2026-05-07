@@ -3,8 +3,8 @@ import type { ChangeSetStatus } from "../domain/change-set.js";
 export type ChangeSetStatusExtended = ChangeSetStatus | "escalated";
 
 export interface TransitionDef {
-  from: ChangeSetStatusExtended;
-  to: ChangeSetStatusExtended;
+  from: string;
+  to: string;
   trigger: string;
 }
 

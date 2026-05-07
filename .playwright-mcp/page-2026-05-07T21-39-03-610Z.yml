@@ -1,0 +1,379 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to light mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e29]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - heading "Settings" [level=1] [ref=e32]
+        - paragraph [ref=e33]: Configure the active workflow mode, agent assignments, and monitor live sessions.
+      - generic [ref=e34]:
+        - button "Workflow" [ref=e35] [cursor=pointer]
+        - button "Agents" [active] [ref=e36] [cursor=pointer]
+        - button "Sessions" [ref=e37] [cursor=pointer]
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - generic [ref=e116]:
+            - heading "Agent Assignments" [level=3] [ref=e117]
+            - paragraph [ref=e118]: "Mode: gsd — showing 12 assignments"
+          - table [ref=e120]:
+            - rowgroup [ref=e121]:
+              - row "State Role Tool Model Auto-launch Enabled" [ref=e122]:
+                - columnheader "State" [ref=e123]
+                - columnheader "Role" [ref=e124]
+                - columnheader "Tool" [ref=e125]
+                - columnheader "Model" [ref=e126]
+                - columnheader "Auto-launch" [ref=e127]
+                - columnheader "Enabled" [ref=e128]
+                - columnheader [ref=e129]
+            - rowgroup [ref=e130]:
+              - row "discussing pm_planner Claude Code Role default" [ref=e131]:
+                - cell "discussing" [ref=e132]
+                - cell "pm_planner" [ref=e133]
+                - cell "Claude Code" [ref=e134]:
+                  - combobox [ref=e135]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e136]:
+                  - combobox [ref=e137]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e138]:
+                  - switch [ref=e139] [cursor=pointer]
+                - cell [ref=e141]:
+                  - checkbox [checked] [ref=e142] [cursor=pointer]
+                - cell [ref=e143]
+              - row "executing implementer Claude Code Role default" [ref=e144]:
+                - cell "executing" [ref=e145]
+                - cell "implementer" [ref=e146]
+                - cell "Claude Code" [ref=e147]:
+                  - combobox [ref=e148]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e149]:
+                  - combobox [ref=e150]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e151]:
+                  - switch [ref=e152] [cursor=pointer]
+                - cell [ref=e154]:
+                  - checkbox [checked] [ref=e155] [cursor=pointer]
+                - cell [ref=e156]
+              - row "gap_fixing fixer Claude Code Role default" [ref=e157]:
+                - cell "gap_fixing" [ref=e158]
+                - cell "fixer" [ref=e159]
+                - cell "Claude Code" [ref=e160]:
+                  - combobox [ref=e161]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e162]:
+                  - combobox [ref=e163]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e164]:
+                  - switch [ref=e165] [cursor=pointer]
+                - cell [ref=e167]:
+                  - checkbox [checked] [ref=e168] [cursor=pointer]
+                - cell [ref=e169]
+              - row "planning plan_verifier Claude Code Role default" [ref=e170]:
+                - cell "planning" [ref=e171]
+                - cell "plan_verifier" [ref=e172]
+                - cell "Claude Code" [ref=e173]:
+                  - combobox [ref=e174]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e175]:
+                  - combobox [ref=e176]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e177]:
+                  - switch [ref=e178] [cursor=pointer]
+                - cell [ref=e180]:
+                  - checkbox [checked] [ref=e181] [cursor=pointer]
+                - cell [ref=e182]
+              - row "planning planner Claude Code Role default" [ref=e183]:
+                - cell "planning" [ref=e184]
+                - cell "planner" [ref=e185]
+                - cell "Claude Code" [ref=e186]:
+                  - combobox [ref=e187]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e188]:
+                  - combobox [ref=e189]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e190]:
+                  - switch [ref=e191] [cursor=pointer]
+                - cell [ref=e193]:
+                  - checkbox [checked] [ref=e194] [cursor=pointer]
+                - cell [ref=e195]
+              - row "planning researcher Claude Code Role default" [ref=e196]:
+                - cell "planning" [ref=e197]
+                - cell "researcher" [ref=e198]
+                - cell "Claude Code" [ref=e199]:
+                  - combobox [ref=e200]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e201]:
+                  - combobox [ref=e202]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e203]:
+                  - switch [ref=e204] [cursor=pointer]
+                - cell [ref=e206]:
+                  - checkbox [checked] [ref=e207] [cursor=pointer]
+                - cell [ref=e208]
+              - row "project_init pm_planner Claude Code Role default" [ref=e209]:
+                - cell "project_init" [ref=e210]
+                - cell "pm_planner" [ref=e211]
+                - cell "Claude Code" [ref=e212]:
+                  - combobox [ref=e213]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e214]:
+                  - combobox [ref=e215]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e216]:
+                  - switch [ref=e217] [cursor=pointer]
+                - cell [ref=e219]:
+                  - checkbox [checked] [ref=e220] [cursor=pointer]
+                - cell [ref=e221]
+              - row "project_init researcher Claude Code Role default" [ref=e222]:
+                - cell "project_init" [ref=e223]
+                - cell "researcher" [ref=e224]
+                - cell "Claude Code" [ref=e225]:
+                  - combobox [ref=e226]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e227]:
+                  - combobox [ref=e228]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e229]:
+                  - switch [ref=e230] [cursor=pointer]
+                - cell [ref=e232]:
+                  - checkbox [checked] [ref=e233] [cursor=pointer]
+                - cell [ref=e234]
+              - row "shipping pr_builder Claude Code Role default" [ref=e235]:
+                - cell "shipping" [ref=e236]
+                - cell "pr_builder" [ref=e237]
+                - cell "Claude Code" [ref=e238]:
+                  - combobox [ref=e239]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e240]:
+                  - combobox [ref=e241]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e242]:
+                  - switch [ref=e243] [cursor=pointer]
+                - cell [ref=e245]:
+                  - checkbox [checked] [ref=e246] [cursor=pointer]
+                - cell [ref=e247]
+              - row "shipping summarizer Claude Code Role default" [ref=e248]:
+                - cell "shipping" [ref=e249]
+                - cell "summarizer" [ref=e250]
+                - cell "Claude Code" [ref=e251]:
+                  - combobox [ref=e252]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e253]:
+                  - combobox [ref=e254]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e255]:
+                  - switch [ref=e256] [cursor=pointer]
+                - cell [ref=e258]:
+                  - checkbox [checked] [ref=e259] [cursor=pointer]
+                - cell [ref=e260]
+              - row "verifying qa_agent Claude Code Role default" [ref=e261]:
+                - cell "verifying" [ref=e262]
+                - cell "qa_agent" [ref=e263]
+                - cell "Claude Code" [ref=e264]:
+                  - combobox [ref=e265]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e266]:
+                  - combobox [ref=e267]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e268]:
+                  - switch [ref=e269] [cursor=pointer]
+                - cell [ref=e271]:
+                  - checkbox [checked] [ref=e272] [cursor=pointer]
+                - cell [ref=e273]
+              - row "verifying verifier Claude Code Role default" [ref=e274]:
+                - cell "verifying" [ref=e275]
+                - cell "verifier" [ref=e276]
+                - cell "Claude Code" [ref=e277]:
+                  - combobox [ref=e278]:
+                    - option "Claude Code" [selected]
+                    - option "Codex"
+                    - option "Cursor"
+                    - option "Copilot CLI"
+                    - option "Gemini"
+                    - option "Aider"
+                    - option "Human (HITL)"
+                - cell "Role default" [ref=e279]:
+                  - combobox [ref=e280]:
+                    - option "Role default" [selected]
+                    - option "Claude Opus 4.7"
+                    - option "Claude Sonnet 4.6"
+                    - option "Claude Haiku 4.5"
+                    - option "GPT-4o"
+                    - option "o3"
+                    - option "o4-mini"
+                    - option "Gemini 2.5 Pro"
+                    - option "Gemini 2.5 Flash"
+                - cell [ref=e281]:
+                  - switch [ref=e282] [cursor=pointer]
+                - cell [ref=e284]:
+                  - checkbox [checked] [ref=e285] [cursor=pointer]
+                - cell [ref=e286]
+        - paragraph [ref=e287]: Click a state node in the FSM diagram to configure prompt overrides and MCP settings.

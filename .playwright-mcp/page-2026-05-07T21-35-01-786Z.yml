@@ -1,0 +1,88 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]: Local SDLC
+    - link "Board" [ref=e6] [cursor=pointer]:
+      - /url: "#/"
+      - img [ref=e7]
+      - text: Board
+    - link "Flow" [ref=e12] [cursor=pointer]:
+      - /url: "#/flow"
+      - img [ref=e13]
+      - text: Flow
+    - link "Settings" [active] [ref=e17] [cursor=pointer]:
+      - /url: "#/settings"
+      - img [ref=e18]
+      - text: Settings
+    - button "Switch to dark mode" [ref=e22] [cursor=pointer]:
+      - img [ref=e23]
+  - main [ref=e25]:
+    - generic [ref=e36]:
+      - generic [ref=e37]:
+        - heading "Settings" [level=1] [ref=e38]
+        - paragraph [ref=e39]: Configure the active workflow mode, agent assignments, and monitor live sessions.
+      - generic [ref=e40]:
+        - button "Workflow" [ref=e41] [cursor=pointer]
+        - button "Agents" [ref=e42] [cursor=pointer]
+        - button "Sessions" [ref=e43] [cursor=pointer]
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - heading "Workflow Mode" [level=3] [ref=e48]
+            - paragraph [ref=e49]: Switch the active FSM. The diagram and agent assignments update immediately.
+          - generic [ref=e50]:
+            - button "Changeset" [ref=e51] [cursor=pointer]
+            - button "GSD" [disabled] [ref=e52]
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - generic [ref=e55]: Changeset mode
+              - text: "Code review workflow: draft → planned → implementing → reviewing → approved → merged. Optimized for pull-request-driven development with automated review gates."
+            - generic [ref=e56]:
+              - generic [ref=e57]: GSD mode
+              - text: "Get-Shit-Done workflow: project init → roadmap → discuss → plan → execute → verify → ship. Optimized for feature delivery with milestone-based iteration."
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - heading "HITL Gates" [level=3] [ref=e60]
+            - paragraph [ref=e61]: Transitions with HITL gates require human approval before the FSM advances. Off = agent proceeds automatically.
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e64]: all_phases_done
+              - switch [ref=e65] [cursor=pointer]
+            - generic [ref=e67]:
+              - generic [ref=e68]: decisions_captured
+              - switch [ref=e69] [cursor=pointer]
+            - generic [ref=e71]:
+              - generic [ref=e72]: execution_complete
+              - switch [ref=e73] [cursor=pointer]
+            - generic [ref=e75]:
+              - generic [ref=e76]: gaps_found
+              - switch [ref=e77] [cursor=pointer]
+            - generic [ref=e79]:
+              - generic [ref=e80]: gaps_resolved
+              - switch [ref=e81] [cursor=pointer]
+            - generic [ref=e83]:
+              - generic [ref=e84]: new_milestone
+              - switch [checked] [ref=e85] [cursor=pointer]
+            - generic [ref=e87]:
+              - generic [ref=e88]: plans_verified
+              - switch [ref=e89] [cursor=pointer]
+            - generic [ref=e91]:
+              - generic [ref=e92]: pr_created
+              - switch [ref=e93] [cursor=pointer]
+            - generic [ref=e95]:
+              - generic [ref=e96]: roadmap_approved
+              - switch [checked] [ref=e97] [cursor=pointer]
+            - generic [ref=e99]:
+              - generic [ref=e100]: skip_discuss
+              - switch [ref=e101] [cursor=pointer]
+            - generic [ref=e103]:
+              - generic [ref=e104]: start_execution
+              - switch [ref=e105] [cursor=pointer]
+            - generic [ref=e107]:
+              - generic [ref=e108]: start_next_phase
+              - switch [ref=e109] [cursor=pointer]
+            - generic [ref=e111]:
+              - generic [ref=e112]: start_phase
+              - switch [ref=e113] [cursor=pointer]
+            - generic [ref=e115]:
+              - generic [ref=e116]: verification_passed
+              - switch [checked] [ref=e117] [cursor=pointer]

@@ -1,0 +1,52 @@
+[     497ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:21608
+[     520ms] [WARNING] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. @ http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4435
+[     520ms] [WARNING] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath. @ http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4435
+[     526ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/favicon.ico:0
+[   34617ms] [ERROR] Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.%s 
+    at NodePanel (http://localhost:5173/src/components/workflow-editor/NodePanel.tsx:601:29)
+    at div
+    at div
+    at FlowDiagramInner (http://localhost:5173/src/pages/FlowDiagram.tsx:163:47)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:87:33)
+    at FlowDiagram
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4544:15)
+    at HashRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:5326:5)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=124b0cc8:3235:3)
+    at ThemeProvider (http://localhost:5173/src/components/ThemeProvider.tsx:21:33)
+    at App @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:520
+[   34622ms] [ERROR] Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.%s 
+    at NodePanel (http://localhost:5173/src/components/workflow-editor/NodePanel.tsx:601:29)
+    at div
+    at div
+    at FlowDiagramInner (http://localhost:5173/src/pages/FlowDiagram.tsx:163:47)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:87:33)
+    at FlowDiagram
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4544:15)
+    at HashRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:5326:5)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=124b0cc8:3235:3)
+    at ThemeProvider (http://localhost:5173/src/components/ThemeProvider.tsx:21:33)
+    at App @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:520
+[   34626ms] [ERROR] Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.%s 
+    at NodePanel (http://localhost:5173/src/components/workflow-editor/NodePanel.tsx:601:29)
+    at div
+    at div
+    at FlowDiagramInner (http://localhost:5173/src/pages/FlowDiagram.tsx:163:47)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:87:33)
+    at FlowDiagram
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:4544:15)
+    at HashRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=124b0cc8:5326:5)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=124b0cc8:3235:3)
+    at ThemeProvider (http://localhost:5173/src/components/ThemeProvider.tsx:21:33)
+    at App @ http://localhost:5173/node_modules/.vite/deps/chunk-PNGJSGSD.js?v=124b0cc8:520

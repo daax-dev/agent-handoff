@@ -107,8 +107,7 @@ export function createApiServer(options: ServerOptions) {
       if (decisionResponse) return addCors(decisionResponse, origin);
 
       // Agent assignment + session routes (PRD-020)
-      const assignResponse = agentAssignmentRoutes(db, path, req);
-      if (assignResponse instanceof Promise) return assignResponse.then((r) => addCors(r, origin));
+      const assignResponse = await agentAssignmentRoutes(db, path, req);
       if (assignResponse) return addCors(assignResponse, origin);
 
       const sessionResponse = agentSessionRoutes(db, path, req);
