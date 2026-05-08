@@ -17,7 +17,7 @@ When `API_TOKEN` is set:
 - All requests must include `Authorization: Bearer <token>`
 - Requests missing the header or with a wrong token receive `401 Unauthorized`
 - `GET /api/health` is always exempt
-- Requests from the Vite UI dev-server (localhost ports 5173–5182) are always exempt
+- Requests from the Vite UI dev-server (localhost ports 5173–5182) are exempt **when also originating from a loopback address (127.0.0.1 / ::1)**
 
 > **Note:** Origin-based exemption only applies when the request also originates from a loopback address (127.0.0.1 / ::1), so remote clients cannot bypass auth by spoofing the Origin header. For production use, require the token on all callers.
 
