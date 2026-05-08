@@ -1,4 +1,4 @@
-import type { Job, JobStatus, TransportMode, AgentName } from "./types.js";
+import type { Job, JobSnapshot, JobStatus, TransportMode, AgentName } from "./types.js";
 
 const jobs = new Map<string, Job>();
 
@@ -65,6 +65,42 @@ export function listJobs(): Job[] {
 
 export function deleteJob(jobId: string): boolean {
   return jobs.delete(jobId);
+}
+
+/**
+ * Capture the job's current state as a snapshot stored on the job itself.
+ * Call immediately after createJob (before any updateJob mutations) so that
+ * rollbackJob can restore the pre-handshake state.
+ */
+export function snapshotJob(jobId: string): JobSnapshot | undefined {
+  const job = jobs.get(jobId);
+  if (!job) return undefined;
+  const snap: JobSnapshot = {
+    status: job.status,
+    handshakeStatus: job.handshakeStatus,
+    handshakeRejectionReason: job.handshakeRejectionReason,
+    error: job.error,
+  };
+  job.snapshot = snap;
+  return snap;
+}
+
+/**
+ * Restore a job to its previously snapshotted state.
+ * Clears retryExhausted so the caller can re-attempt the handshake.
+ */
+export function rollbackJob(jobId: string): Job | undefined {
+  const job = jobs.get(jobId);
+  if (!job?.snapshot) return undefined;
+  const { status, handshakeStatus, handshakeRejectionReason, error } = job.snapshot;
+  Object.assign(job, {
+    status,
+    handshakeStatus,
+    handshakeRejectionReason,
+    error,
+    retryExhausted: undefined,
+  });
+  return job;
 }
 
 /**
