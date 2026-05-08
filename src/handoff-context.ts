@@ -142,12 +142,21 @@ export function deserializeContext(encoded: string): HandoffContext {
       `Compressed payload ${compressed.byteLength} bytes exceeds limit of ${MAX_COMPRESSED_BYTES} bytes`,
     );
   }
-  // Guard against decompression bombs: check uncompressed size before JSON.parse
-  const decompressed = inflateSync(compressed);
-  if (decompressed.byteLength > MAX_UNCOMPRESSED_BYTES) {
-    throw new Error(
-      `Uncompressed payload ${decompressed.byteLength} bytes exceeds limit of ${MAX_UNCOMPRESSED_BYTES} bytes`,
-    );
+  // Guard against decompression bombs by enforcing the uncompressed limit
+  // during inflation, before a larger output buffer can be produced.
+  let decompressed: Buffer;
+  try {
+    decompressed = inflateSync(compressed, {
+      maxOutputLength: MAX_UNCOMPRESSED_BYTES,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("maxoutputlength")) {
+      throw new Error(
+        `Uncompressed payload exceeds limit of ${MAX_UNCOMPRESSED_BYTES} bytes`,
+      );
+    }
+    throw error;
   }
   const raw = JSON.parse(decompressed.toString("utf8")) as unknown;
   return HandoffContextSchema.parse(raw);

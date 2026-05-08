@@ -104,15 +104,20 @@ async function escalateTimeout(proposal: HandoffProposal, timeoutMs: number): Pr
   };
 
   if (hawkeyeUrl) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5_000);
+
     try {
       await fetch(hawkeyeUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(structuredWarning),
-        signal: AbortSignal.timeout(5_000),
+        signal: controller.signal,
       });
     } catch {
       // Best-effort escalation — fall through to stderr
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
