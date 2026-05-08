@@ -1,4 +1,4 @@
-export type AgentName = "claude" | "codex" | "gemini" | "copilot" | "opencode" | "aider";
+export type AgentName = "claude" | "codex" | "gemini" | "copilot" | "opencode";
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "timed_out";
 

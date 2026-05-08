@@ -11,6 +11,9 @@ import { agentAssignmentRoutes } from "./routes/agent-assignments.js";
 import { agentSessionRoutes } from "./routes/agent-sessions.js";
 import { fsmMetaRoute } from "./routes/fsm-meta.js";
 import { fsmWorkflowRoute } from "./routes/fsm-workflow.js";
+import { mcpServersRoute } from "./routes/mcp-servers.js";
+import { skillsRoute } from "./routes/skills.js";
+import { rolesRoute } from "./routes/roles.js";
 import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
@@ -105,6 +108,16 @@ export function createApiServer(options: ServerOptions) {
         return decisionResponse.then((r) => addCors(r, origin));
       }
       if (decisionResponse) return addCors(decisionResponse, origin);
+
+      // MCP servers, skills, roles (PRD-023)
+      const mcpResponse = mcpServersRoute(path, req);
+      if (mcpResponse) return addCors(mcpResponse, origin);
+
+      const skillsResponse = skillsRoute(path, req);
+      if (skillsResponse) return addCors(skillsResponse, origin);
+
+      const rolesResponse = rolesRoute(path, req);
+      if (rolesResponse) return addCors(rolesResponse, origin);
 
       // Agent assignment + session routes (PRD-020)
       const assignResponse = await agentAssignmentRoutes(db, path, req);

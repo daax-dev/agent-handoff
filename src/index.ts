@@ -33,7 +33,7 @@ server.tool(
   "handoff_task",
   "Hand off a task to another AI coding agent (CLI spawn or A2A protocol). Returns a job ID for tracking.",
   {
-    agent: z.enum(["claude", "codex", "gemini", "copilot", "opencode", "aider"]).optional().describe("CLI agent to use (spawns local process)"),
+    agent: z.enum(["claude", "codex", "gemini", "copilot", "opencode"]).optional().describe("CLI agent to use (spawns local process)"),
     agentUrl: z.string().url().optional().describe("A2A agent endpoint URL (uses A2A protocol)"),
     prompt: z.string().describe("Task description / prompt for the agent"),
     workingDirectory: z.string().optional().describe("Working directory for CLI agents (defaults to cwd)"),

@@ -1,0 +1,1 @@
+ALTER TABLE agent_assignments ADD COLUMN skills TEXT DEFAULT NULL;

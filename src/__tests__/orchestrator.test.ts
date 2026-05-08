@@ -69,7 +69,6 @@ describe("isToolSpawnable", () => {
   it("returns true for CLI tools", () => {
     expect(isToolSpawnable("claude-code")).toBe(true);
     expect(isToolSpawnable("codex")).toBe(true);
-    expect(isToolSpawnable("aider")).toBe(true);
     expect(isToolSpawnable("gemini")).toBe(true);
     expect(isToolSpawnable("copilot-cli")).toBe(true);
   });

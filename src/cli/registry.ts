@@ -5,15 +5,12 @@ import { CodexAdapter } from "./codex.js";
 import { GeminiAdapter } from "./gemini.js";
 import { CopilotAdapter } from "./copilot.js";
 import { OpenCodeAdapter } from "./opencode.js";
-import { AiderAdapter } from "./aider.js";
-
 const adapters: Record<AgentName, BaseAdapter> = {
   claude: new ClaudeAdapter(),
   codex: new CodexAdapter(),
   gemini: new GeminiAdapter(),
   copilot: new CopilotAdapter(),
   opencode: new OpenCodeAdapter(),
-  aider: new AiderAdapter(),
 };
 
 export function getAdapter(name: AgentName): BaseAdapter {

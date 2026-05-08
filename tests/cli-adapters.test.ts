@@ -4,7 +4,6 @@ import { CodexAdapter } from "../src/cli/codex.js";
 import { GeminiAdapter } from "../src/cli/gemini.js";
 import { CopilotAdapter } from "../src/cli/copilot.js";
 import { OpenCodeAdapter } from "../src/cli/opencode.js";
-import { AiderAdapter } from "../src/cli/aider.js";
 import { getAdapter, listCliAgents } from "../src/cli/registry.js";
 
 describe("CLI Adapters", () => {
@@ -53,8 +52,8 @@ describe("CLI Adapters", () => {
     });
 
     test("builds args with model", () => {
-      const args = adapter.buildArgs("refactor auth", { model: "o3" });
-      expect(args).toEqual(["exec", "--json", "--model", "o3"]);
+      const args = adapter.buildArgs("refactor auth", { model: "gpt-5.5" });
+      expect(args).toEqual(["exec", "--json", "-c", 'model="gpt-5.5"']);
     });
 
     test("parseOutput handles JSONL (last line)", () => {
@@ -118,36 +117,6 @@ describe("CLI Adapters", () => {
     });
   });
 
-  describe("AiderAdapter", () => {
-    const adapter = new AiderAdapter();
-
-    test("has correct name and command", () => {
-      expect(adapter.name).toBe("aider");
-      expect(adapter.command).toBe("aider");
-    });
-
-    test("builds args with --message and --yes-always --no-git", () => {
-      const args = adapter.buildArgs("refactor auth");
-      expect(args).toEqual(["--message", "refactor auth", "--yes-always", "--no-git"]);
-    });
-
-    test("builds args with model (OpenRouter)", () => {
-      const args = adapter.buildArgs("refactor auth", { model: "openrouter/minimax/minimax-01" });
-      expect(args).toEqual(["--message", "refactor auth", "--yes-always", "--no-git", "--model", "openrouter/minimax/minimax-01"]);
-    });
-
-    test("builds args with model (Ollama local)", () => {
-      const args = adapter.buildArgs("write tests", { model: "ollama/qwen2.5-coder:32b" });
-      expect(args).toEqual(["--message", "write tests", "--yes-always", "--no-git", "--model", "ollama/qwen2.5-coder:32b"]);
-    });
-
-    test("parseOutput returns raw text", () => {
-      const result = adapter.parseOutput("aider output here");
-      expect(result.text).toBe("aider output here");
-      expect(result.structured).toBeUndefined();
-    });
-  });
-
   describe("Registry", () => {
     test("getAdapter returns correct adapter", () => {
       expect(getAdapter("claude").name).toBe("claude");
@@ -158,16 +127,15 @@ describe("CLI Adapters", () => {
       expect(() => getAdapter("unknown" as any)).toThrow("Unknown agent");
     });
 
-    test("listCliAgents returns all 6 agents", () => {
+    test("listCliAgents returns all 5 agents", () => {
       const agents = listCliAgents();
-      expect(agents).toHaveLength(6);
+      expect(agents).toHaveLength(5);
       const names = agents.map((a) => a.name);
       expect(names).toContain("claude");
       expect(names).toContain("codex");
       expect(names).toContain("gemini");
       expect(names).toContain("copilot");
       expect(names).toContain("opencode");
-      expect(names).toContain("aider");
       // Each agent has name, available (boolean), command (string)
       for (const agent of agents) {
         expect(typeof agent.available).toBe("boolean");

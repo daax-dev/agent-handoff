@@ -8,6 +8,7 @@ import { approveCmd } from "./commands/approve.js";
 import { mergeCmd } from "./commands/merge.js";
 import { exportCmd } from "./commands/export.js";
 import { importIssueCmd } from "./commands/import-issue.js";
+import { setupCmd } from "./commands/setup.js";
 import { ApiError } from "./api-client.js";
 
 const program = new Command()
@@ -71,6 +72,14 @@ program
   .description("Import a GitHub issue as a local Task")
   .action(async (url: string) => {
     await run(() => importIssueCmd(url));
+  });
+
+program
+  .command("setup")
+  .description("Install agent skills into .claude/settings.json (run once after changing assignments)")
+  .option("--dry-run", "Show what would change without writing files")
+  .action(async (opts: { dryRun?: boolean }) => {
+    await run(() => setupCmd(opts));
   });
 
 async function run(fn: () => Promise<void> | void) {

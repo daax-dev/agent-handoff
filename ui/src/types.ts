@@ -100,7 +100,7 @@ export interface FSMCheckpoint {
   metadata: string | null;
 }
 
-export type AgentTool = "claude-code" | "codex" | "cursor" | "copilot-cli" | "gemini" | "aider" | "human";
+export type AgentTool = "claude-code" | "codex" | "cursor" | "copilot-cli" | "gemini" | "human";
 
 export const TOOL_LABELS: Record<AgentTool, string> = {
   "claude-code":  "Claude Code",
@@ -108,7 +108,6 @@ export const TOOL_LABELS: Record<AgentTool, string> = {
   "cursor":       "Cursor",
   "copilot-cli":  "Copilot CLI",
   "gemini":       "Gemini",
-  "aider":        "Aider",
   "human":        "Human (HITL)",
 };
 
@@ -123,6 +122,7 @@ export interface AgentAssignment {
   prompt_override: string | null;
   mcps: string[] | null;
   auto_launch: boolean;
+  skills: string[] | null;
 }
 
 export type SessionStatus = "waiting" | "busy" | "done" | "disconnected";

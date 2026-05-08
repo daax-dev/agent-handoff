@@ -3,10 +3,11 @@ import {
   listAssignments,
   listAssignmentsByStates,
   upsertAssignment,
+  deleteAssignment,
   SUPPORTED_TOOLS,
   type AgentTool,
 } from "../../domain/agent-assignment.js";
-import { json, badRequest } from "../response.js";
+import { json, badRequest, notFound } from "../response.js";
 
 // GSD and changeset state sets for mode-scoped filtering
 const GSD_STATES = new Set([
@@ -56,6 +57,16 @@ export async function agentAssignmentRoutes(
     return json(listAssignmentsByStates(db, states));
   }
 
+  // DELETE /api/agent-assignments/:fsmState/:role
+  if (method === "DELETE") {
+    const delMatch = path.match(/^\/api\/agent-assignments\/([^/]+)\/([^/]+)$/);
+    if (delMatch) {
+      const [, fsmState, role] = delMatch;
+      const deleted = deleteAssignment(db, fsmState, role);
+      return deleted ? json({ ok: true }) : notFound(`Assignment ${fsmState}/${role} not found`);
+    }
+  }
+
   // PUT /api/agent-assignments/:fsmState/:role
   const putMatch = path.match(/^\/api\/agent-assignments\/([^/]+)\/([^/]+)$/);
   if (putMatch && method === "PUT") {
@@ -90,6 +101,10 @@ export async function agentAssignmentRoutes(
       return badRequest("mcps must be an array of strings or null");
     }
 
+    if ("skills" in b && b.skills !== null && !isMcpsArray(b.skills)) {
+      return badRequest("skills must be an array of strings or null");
+    }
+
     if ("auto_launch" in b && typeof b.auto_launch !== "boolean") {
       return badRequest("auto_launch must be a boolean");
     }
@@ -103,6 +118,7 @@ export async function agentAssignmentRoutes(
       prompt_override: isNullableString(b.prompt_override) ? b.prompt_override : null,
       mcps: "mcps" in b ? (b.mcps === null ? null : (b.mcps as string[])) : undefined,
       auto_launch: typeof b.auto_launch === "boolean" ? b.auto_launch : false,
+      skills: "skills" in b ? (b.skills === null ? null : (b.skills as string[])) : undefined,
     });
 
     return json(updated);

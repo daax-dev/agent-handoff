@@ -1,0 +1,64 @@
+# Agent Tool → Valid Model Mapping
+#
+# Purpose: authoritative reference for which models each CLI tool accepts.
+# Format:  provider:model-id  (matches AgentsTab MODEL_OPTIONS values in the UI)
+#
+# model_selection values:
+#   supported      — tool accepts a --model flag; only listed models are valid
+#   not_applicable — tool does not expose model selection via CLI spawn
+#
+# IMPORTANT: assignment.model currently flows into the DB only; the spawner
+# (src/orchestrator/spawner.ts) does not yet pass --model to the spawned
+# process. When that wiring is added, invalid combinations will cause runtime
+# errors. This map prevents those combinations from being persisted via the UI.
+#
+# Frontend mirror: ui/src/lib/agent-model-map.ts — keep in sync.
+# Note: agent-roles.yaml uses bare Anthropic IDs (e.g. claude-sonnet-4-6);
+#       this file uses the provider-prefixed form required by the UI dropdown.
+
+tools:
+  claude-code:
+    model_selection: supported
+    description: "Claude Code CLI — Anthropic models only via --model flag"
+    # Accepts short aliases (sonnet, opus, haiku) or full pinned IDs below.
+    models:
+      - anthropic:claude-opus-4-7
+      - anthropic:claude-sonnet-4-6
+      - anthropic:claude-haiku-4-5-20251001
+
+  codex:
+    model_selection: supported
+    description: "OpenAI Codex CLI — gpt-5.x series via -m flag"
+    # Source: codex-rs/models-manager/models.json + live model selector (v0.129.0)
+    models:
+      - openai:gpt-5.5
+      - openai:gpt-5.4
+      - openai:gpt-5.4-mini
+      - openai:gpt-5.3-codex
+      - openai:gpt-5.2
+
+  gemini:
+    model_selection: supported
+    description: "Google Gemini CLI — Gemini models via --model flag (default: auto → gemini-3-pro-preview)"
+    # Source: gemini-cli docs/reference/configuration.md + docs/cli/model.md (v0.25.0)
+    models:
+      - google:gemini-3-pro-preview
+      - google:gemini-3-flash-preview
+      - google:gemini-2.5-pro
+      - google:gemini-2.5-flash
+      - google:gemini-2.5-flash-lite
+
+  cursor:
+    model_selection: not_applicable
+    description: "Cursor IDE — model selected inside the editor, not via CLI spawn (cursor <file>)"
+    models: []
+
+  copilot-cli:
+    model_selection: not_applicable
+    description: "GitHub Copilot CLI (gh copilot suggest) — no --model flag available"
+    models: []
+
+  human:
+    model_selection: not_applicable
+    description: "Human HITL gate — no AI model involved"
+    models: []

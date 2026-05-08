@@ -28,7 +28,6 @@ const TOOL_COMMANDS: Record<Exclude<AgentTool, "human">, (prompt: string, handof
   "codex":        (p) => ["codex", p],
   "cursor":       (_p, h) => ["cursor", h],   // opens handoff.md directly in Cursor IDE
   "copilot-cli":  (p) => ["gh", "copilot", "suggest", p],
-  "aider":        (p) => ["aider", "--yes-always", "--message", p],
   "gemini":       (p) => ["gemini", "--prompt", p],
 };
 

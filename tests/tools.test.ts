@@ -72,7 +72,7 @@ describe("Tool Handlers", () => {
       const data = JSON.parse(result.content[0].text);
       expect(Array.isArray(data.cli)).toBe(true);
       expect(Array.isArray(data.a2a)).toBe(true);
-      expect(data.cli.length).toBe(6);
+      expect(data.cli.length).toBe(5);
       // Each CLI agent has name, available, command
       for (const agent of data.cli) {
         expect(agent).toHaveProperty("name");

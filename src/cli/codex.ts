@@ -8,7 +8,7 @@ export class CodexAdapter extends BaseAdapter {
 
   buildArgs(_prompt: string, options?: SpawnOptions): string[] {
     const args = ["exec", "--json"];
-    if (options?.model) args.push("--model", options.model);
+    if (options?.model) args.push("-c", `model="${options.model}"`);
     return args;
   }
 

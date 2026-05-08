@@ -15,7 +15,7 @@ export function Settings() {
   const [tab, setTab] = useState<Tab>("workflow");
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="text-lg font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">

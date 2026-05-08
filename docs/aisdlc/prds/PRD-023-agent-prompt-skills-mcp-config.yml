@@ -1,0 +1,386 @@
+name: "PRD-023: Agent Prompt, Skills & MCP Configuration"
+description: >
+  Extend the agent assignment UI (NodePanel + AgentsTab) so that configuring an agent
+  means picking from discovered MCP servers, selecting tool-specific skills, and
+  viewing/overriding the role prompt — all driven by which tool is assigned.
+  NodePanel becomes 400px wide with 4 tabs. Configured skills are installed into
+  the tool environment once via `localsdlc setup` — not on every spawn.
+area: cross-cutting
+
+# ── Decisions (locked 2026-05-07) ────────────────────────────────────────────
+
+decisions: |
+  Q1 Skills discovery: hardcoded list first (portable baseline).
+     Backlog item: "auto-discover Claude Code skills from `claude` CLI at runtime."
+  Q2 NodePanel width: 400px.
+  Q3 Codex MCP: YES — include ~/.codex/config.toml MCP servers.
+  Q4 Skills wiring: setup runs ONCE via `localsdlc setup` (not per-spawn).
+     Critical to be correct and low friction. A developer runs it after changing
+     assignments; from then on spawned agents already have the right skills.
+     The spawner itself does NOT install skills — it spawns cold.
+
+# ── Goal ──────────────────────────────────────────────────────────────────────
+
+goal: >
+  When a developer configures an agent assignment they should see: (1) the role's
+  base prompt and be able to append to it, (2) a picker of MCP servers that actually
+  exist in the system, (3) a tool-aware skills picker. All three are persisted per
+  assignment. A single `localsdlc setup` command installs the configured skills into
+  each tool's environment so spawned agents have them available — run once after
+  changing assignments, not on every spawn.
+
+# ── Current state (what exists today) ────────────────────────────────────────
+
+current_state: |
+  NodePanel (FSM node click):
+    - 300px panel, single scrollable column
+    - tool select, model select (stale list — not using agent-model-map.ts), auto-launch toggle
+    - MCPs: freeform text input → typed tags — no validation, no discovery
+    - prompt_override: collapsible textarea — no base prompt preview
+    - No skills concept
+
+  AgentsTab (Settings > Agents):
+    - tool, model, auto-launch, enabled columns
+    - No MCPs editing, no skills, no prompt editing
+
+  DB (agent_assignments):
+    - id, fsm_state, role, tool, enabled, updated_at, model,
+      prompt_override, mcps (TEXT JSON array), auto_launch
+    - No skills column
+
+  CLI (localsdlc):
+    - Commands: init, new, status, review, approve, merge, export, import-issue
+    - No setup command
+
+  Backend:
+    - No endpoint for available MCP servers
+    - No endpoint for skills per tool
+    - No endpoint to serve role prompt content
+
+# ── Output format ─────────────────────────────────────────────────────────────
+
+output_format: |
+  DATABASE
+    migrations/014_agent_skills.sql
+      ALTER TABLE agent_assignments ADD COLUMN skills TEXT DEFAULT NULL;
+      -- NULL = inherit role defaults; '[]' = explicitly none;
+      -- '["review","security-review"]' = explicit set
+
+  BACKEND — new API routes
+    src/api/routes/mcp-servers.ts
+      GET /api/mcp-servers
+        Reads ~/.claude/settings.json → $.mcpServers (object keys = server names).
+        Reads ./.claude/settings.json (cwd-relative) if present.
+        Reads ~/.codex/config.toml → [mcp] table (key = server name) via Bun.TOML.
+        Returns: { servers: [{ name: string, source: "claude-global"|"claude-local"|"codex" }] }
+        Deduplicates by name (first-seen source wins). Never throws — missing/malformed = skip silently.
+
+    src/api/routes/skills.ts
+      GET /api/skills?tool=<AgentTool>
+        Hardcoded catalogue. Response: { skills: [{ name: string, description: string }] }
+        claude-code skills:
+          init             — Initialize CLAUDE.md for a codebase
+          review           — Review a pull request
+          security-review  — Security review of branch changes
+          simplify         — Review changed code for quality and reuse
+          schedule         — Create/manage scheduled remote agents
+          claude-api       — Build/debug Claude API / Anthropic SDK apps
+          update-config    — Configure Claude Code harness via settings.json
+          keybindings-help — Customize keyboard shortcuts
+          loop             — Run a prompt/command on a recurring interval
+          fewer-permission-prompts — Add allowlist to reduce permission prompts
+        All other tools → { skills: [] }
+
+    src/api/routes/roles.ts
+      GET /api/roles/:role/prompt
+        Reads src/roles/prompts/<role>.md (hyphens/underscores interchangeable in lookup).
+        Returns { content: string }. 404 if role file not found.
+
+    src/api/server.ts — register mcp-servers, skills, roles routes.
+
+  BACKEND — domain
+    src/domain/agent-assignment.ts
+      Add skills: string[] | null to AgentAssignment interface.
+      Update getAssignment(), upsertAssignment() to include skills column.
+
+  CLI — new setup command (the one-time installer)
+    src/cli/commands/setup.ts
+      `localsdlc setup [--dry-run]`
+
+      Purpose: install configured skills into each tool's environment.
+      Run once after changing agent assignments. Idempotent.
+
+      Algorithm:
+        1. Query all enabled assignments from DB.
+        2. Group by tool. For each tool+skills combination:
+
+           claude-code:
+             Target: .claude/settings.json in process.cwd() (project root, not worktree).
+             Read existing JSON (or start from {}). Merge all unique skill names from
+             all claude-code assignments into the "skills" array key. Write back.
+             Other keys in settings.json are preserved verbatim.
+             If no claude-code assignments have explicit skills (all null/[]):
+               Skip — do not touch settings.json.
+
+           codex / gemini / cursor / copilot-cli / human:
+             No-op — skills concept not supported by these tools.
+
+        3. Print a human-readable summary:
+             ✓  claude-code  →  .claude/settings.json  [review, security-review, init]
+             -  codex        →  (no skills supported)
+             -  human        →  (no skills supported)
+           With --dry-run: show what WOULD be written without writing.
+
+      Error handling:
+        If .claude/settings.json exists but is unparseable JSON → abort with clear error,
+        do not overwrite. Developer must fix the file manually.
+        All other tool configs: no-op, so no error risk.
+
+    src/cli/localsdlc.ts
+      Register `setup` command with --dry-run option.
+      Add to program.commands list.
+
+    src/cli/api-client.ts
+      Add getAssignments(): Promise<AgentAssignment[]> method
+      (calls GET /api/agent-assignments — already exists in backend).
+
+  FRONTEND — new hooks
+    ui/src/hooks/useMcpServers.ts
+      useAvailableMcpServers() — TanStack Query, GET /api/mcp-servers, staleTime 30s.
+
+    ui/src/hooks/useSkills.ts
+      useToolSkills(tool: AgentTool | null) — GET /api/skills?tool=<tool>, staleTime 60s.
+      Returns [] when tool is null.
+
+  FRONTEND — updated NodePanel (ui/src/components/workflow-editor/NodePanel.tsx)
+    Width: 400px (up from 300px).
+
+    Structure: 4-tab layout replacing single scrollable column.
+    Tab bar: simple button-group using existing inline-style + useTheme() palette.
+    Active tab is local component state (not persisted).
+    Save button in footer saves ALL tabs at once (unchanged save-all-on-button pattern).
+
+    Tab 1 "Config":
+      - Tool select (unchanged logic; clears model if new tool doesn't support current model)
+      - Model select — USE agent-model-map.ts (fix stale list; tool-filtered like AgentsTab)
+      - Auto-launch toggle (unchanged)
+      - Enabled checkbox (unchanged)
+
+    Tab 2 "Prompt":
+      - "Base prompt" section (collapsible, default open):
+          Calls GET /api/roles/:role/prompt on mount.
+          Renders as <pre> with monospace font, max-height 200px, overflow-y scroll.
+          On error: "Base prompt unavailable for role <role>".
+      - "Append to base prompt" textarea:
+          Same prompt_override DB field — label only changes.
+          Placeholder: "Additional instructions appended after the role's base prompt…"
+
+    Tab 3 "MCPs":
+      - Human tool: tab hidden (replace tab content with "MCPs not applicable for Human assignments").
+      - "Override defaults" toggle:
+          Off → mcps = null → shows "Using role defaults"
+          On  → mcps = string[] → shows checkbox list
+      - Checkbox list source: useAvailableMcpServers().
+          Each row: checkbox + server name + source badge (claude-global / claude-local / codex).
+          Checked = server name is in the assignment's mcps array.
+      - If useAvailableMcpServers() returns []: show freeform text-input fallback (current behavior).
+      - Toggle back to off: sets mcps = null, clears all checkboxes.
+
+    Tab 4 "Skills":
+      - Source: useToolSkills(state.tool) where state.tool is the CURRENT tab-1 selection
+        (reactive — if tool changes on Config tab, Skills tab updates).
+      - When skills.length > 0 (claude-code):
+          "Override defaults" toggle (same null/[]/[...] pattern as MCPs).
+          Checkbox list: skill name (bold) + description (muted, smaller).
+      - When skills.length === 0:
+          Static message: "Skills not supported by <TOOL_LABELS[tool]>."
+          No toggle shown.
+
+  FRONTEND — updated AgentsTab (ui/src/components/settings/AgentsTab.tsx)
+    Two new read-only columns inserted after Model:
+      "Skills": count badge ("3") | "default" (null) | "none" (empty array).
+      "MCPs":   count badge | "default" | "none".
+    No inline editing — badges are informational.
+    (A tooltip "Edit in FSM view" on hover is optional but not required.)
+
+  TYPES
+    ui/src/types.ts: add skills: string[] | null to AgentAssignment.
+
+  BACKLOG ITEM (document alongside this PRD, create as backlog task)
+    Title: "Auto-discover Claude Code skills from `claude` CLI at runtime"
+    Body:  Replace hardcoded list in src/api/routes/skills.ts with output of
+           `claude skills list --json` (or equivalent command) when binary is on PATH.
+           Fall back to hardcoded list if binary missing or command fails.
+           API contract { skills: [{name, description}] } unchanged.
+
+# ── Constraints ───────────────────────────────────────────────────────────────
+
+constraints: |
+  SETUP COMMAND — correctness + low friction
+  - Single command: `localsdlc setup`. No flags required for the happy path.
+  - --dry-run flag must show exactly what would be written — no surprises.
+  - Must print a clear per-tool summary regardless of --dry-run (not silent).
+  - Idempotent: running setup twice gives the same result as running it once.
+  - Only touches the "skills" key in .claude/settings.json. All other keys untouched.
+  - If .claude/settings.json has invalid JSON: abort with message, do not overwrite.
+  - If no claude-code assignments have explicit skills set (all null): skip file write,
+    print "No skills configured — nothing to write."
+  - setup reads the DB via the running localsdlc server (GET /api/agent-assignments).
+    Server must be running; if not, print "localsdlc server is not running at <url>."
+  - setup installs skills into .claude/settings.json at process.cwd() — the project root
+    where the developer runs the command, not a worktree. Spawned Claude Code agents
+    inherit this via the .claude/ directory in the project root.
+
+  MCP DISCOVERY
+  - Read ~/.claude/settings.json → $.mcpServers (object; keys are server names).
+  - Read ./.claude/settings.json (cwd-relative) → same shape.
+  - Read ~/.codex/config.toml → [mcp] table via Bun.TOML. Key = server name.
+  - Deduplicate by name. Source tag is display-only.
+  - Missing/malformed/unreadable files → skip silently.
+
+  SKILLS CATALOGUE — HARDCODED
+  - Hardcoded in src/api/routes/skills.ts. Do not auto-discover at runtime.
+  - Only "claude-code" has entries. All others → [].
+  - Backlog item created for future auto-discovery.
+
+  NODEVPANEL WIDTH + LAYOUT
+  - Width: 400px. Fixed — not resizable in this PRD.
+  - Tabs via inline-style button group; active tab in local useState.
+  - Stale model list in NodePanel MUST be replaced with agent-model-map.ts values.
+  - save-all-on-button pattern preserved. No per-field auto-save.
+  - No new npm packages.
+
+  BACKEND
+  - New routes follow existing Hono pattern in src/api/server.ts.
+  - Use Bun.TOML for config.toml parsing (built into Bun, no new dep).
+  - No new npm packages.
+
+# ── Failure conditions ────────────────────────────────────────────────────────
+
+failure_conditions: |
+  SETUP COMMAND
+  - Overwrites non-skills keys in .claude/settings.json.
+  - Silently succeeds when server is not running (must error clearly).
+  - Overwrites a malformed settings.json instead of aborting.
+  - Running setup twice produces a different result than running once (not idempotent).
+  - --dry-run writes files (must be truly read-only).
+  - No output printed — developer can't tell what happened.
+
+  UI
+  - MCP picker shows stale/nonexistent servers.
+  - Skills tab shows claude-code skills when tool is codex/gemini/cursor.
+  - Saving skills column clears mcps column or vice versa.
+  - "Override defaults" toggle cannot be reversed back to null.
+  - Base prompt preview shows content from wrong role.
+  - NodePanel model dropdown still has gpt-4o / old gemini IDs.
+  - AgentsTab badges show wrong counts after NodePanel save.
+  - NodePanel panel renders at 300px instead of 400px.
+  - Switching tool on Config tab does not update skills list on Skills tab.
+
+  API
+  - GET /api/mcp-servers throws 500 when config files absent.
+  - GET /api/skills?tool=codex returns non-empty list.
+  - GET /api/roles/:role/prompt returns wrong role's content.
+
+  REGRESSION
+  - Existing NodePanel save path (tool, model, auto_launch, prompt_override, mcps, enabled) broken.
+  - bun run tsc --noEmit fails in root or ui/.
+
+# ── Acceptance criteria ───────────────────────────────────────────────────────
+
+acceptance: |
+  SETUP COMMAND
+  - [ ] Happy path — claude-code assignments with explicit skills:
+        Configure 2 claude-code assignments with skills=["review","security-review"].
+        Run `localsdlc setup`.
+        Verify .claude/settings.json contains "skills": ["review","security-review"] (deduped).
+        Verify no other keys in settings.json were modified.
+
+  - [ ] Idempotency:
+        Run `localsdlc setup` twice. File content identical. No duplicate entries in skills array.
+
+  - [ ] Dry-run:
+        Run `localsdlc setup --dry-run`.
+        Verify .claude/settings.json was NOT written (check mtime).
+        Verify output shows what WOULD be written.
+
+  - [ ] All-null skills — no write:
+        Set all assignments to skills=null. Run `localsdlc setup`.
+        Verify .claude/settings.json is not created if absent.
+        Verify output says "No skills configured — nothing to write."
+
+  - [ ] Malformed settings.json — abort:
+        Write invalid JSON to .claude/settings.json. Run `localsdlc setup`.
+        Verify process exits non-zero with clear error. File unchanged.
+
+  - [ ] Server not running — clear error:
+        Stop localsdlc server. Run `localsdlc setup`.
+        Verify output says server is not reachable (not a cryptic network error).
+
+  NODEVPANEL
+  - [ ] Width and tabs:
+        Click any FSM node → NodePanel opens at 400px with tabs
+        "Config", "Prompt", "MCPs", "Skills" all visible.
+
+  - [ ] Config tab — correct model list:
+        Tool = codex → model dropdown shows gpt-5.5, gpt-5.4, gpt-5.4-mini,
+        gpt-5.3-codex, gpt-5.2. No gpt-4o or o3.
+
+  - [ ] Prompt tab:
+        Role = implementer → "Base prompt" shows content matching
+        src/roles/prompts/implementer.md. Textarea label is "Append to base prompt".
+
+  - [ ] MCPs tab — discovered servers:
+        ~/.claude/settings.json has ≥1 mcpServer entry.
+        MCPs tab → override on → checkbox list shows that server with source badge.
+
+  - [ ] MCPs override reversible:
+        Toggle on → check server → save → reload → mcps=[server].
+        Toggle off → save → reload → mcps=null.
+
+  - [ ] Skills tab — tool-aware:
+        Tool = claude-code → Skills tab shows checkboxes including "review", "security-review".
+        Tool = codex → Skills tab shows "Skills not supported by Codex".
+        Changing tool on Config tab → Skills tab updates without page reload.
+
+  API
+  - [ ] GET /api/mcp-servers → 200 { servers: [] } when no config files exist.
+  - [ ] GET /api/skills?tool=claude-code → includes {name:"review"} and {name:"security-review"}.
+  - [ ] GET /api/skills?tool=codex → skills is [].
+  - [ ] GET /api/roles/implementer/prompt → 200 { content: "..." } matching the .md file.
+
+  AGENTS TAB
+  - [ ] After saving 3 skills via NodePanel → Settings > Agents → row shows "3" badge in Skills column.
+
+  REGRESSION
+  - [ ] bun run tsc --noEmit (root) exits 0.
+  - [ ] cd ui && bun run tsc --noEmit exits 0.
+  - [ ] Existing fields (tool/model/auto_launch/enabled/prompt_override/mcps) save and reload correctly.
+
+# ── Out of scope ──────────────────────────────────────────────────────────────
+
+out_of_scope: |
+  - Creating/editing MCP server configurations from this UI (pick only).
+  - Creating/editing skill definitions (pick only from catalogue).
+  - Auto-discovering Claude Code skills from CLI at runtime (backlog).
+  - Per-ChangeSet skill/MCP overrides (assignment-level only).
+  - Validating that selected MCP servers are currently reachable.
+  - Resizable NodePanel (fixed 400px).
+  - AgentsTab inline editing of prompt/skills/MCPs (click-through to NodePanel).
+  - Gemini CLI MCP support.
+  - Installing skills into worktree-level .claude/ — setup targets project root only.
+  - setup modifying any tool config other than .claude/settings.json "skills" key.
+
+# ── Backlog reference ─────────────────────────────────────────────────────────
+
+backlog_ref: none
+
+# ── Reuse map ─────────────────────────────────────────────────────────────────
+
+reuse_map: |
+  - Extends: PRD-021 (agent-settings-ui) — NodePanel + AgentsTab.
+  - Extends: PRD-020 (agent-orchestrator) — skills field on assignment domain.
+  - Extends: PRD-016 (localsdlc-cli) — adds setup subcommand alongside init/new/etc.
+  - Consumes: agent-model-map.ts — fix NodePanel model list using same source of truth.
+  - Uses: Bun.TOML for ~/.codex/config.toml (built-in, no new dep).
+  - Unblocks: future PRD wiring MCP list into handoff context at spawn time.

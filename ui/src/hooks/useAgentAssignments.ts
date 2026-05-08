@@ -32,6 +32,7 @@ export interface UpdateAssignmentParams {
   prompt_override?: string | null;
   mcps?: string[] | null;
   auto_launch?: boolean;
+  skills?: string[] | null;
 }
 
 export function useUpdateAssignment() {
@@ -48,6 +49,43 @@ export function useUpdateAssignment() {
         return r.json() as Promise<AgentAssignment>;
       });
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-assignments"] });
+    },
+  });
+}
+
+export function useDeleteAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fsmState, role }: { fsmState: string; role: string }) =>
+      fetch(`${API}/api/agent-assignments/${fsmState}/${role}`, { method: "DELETE" }).then((r) => {
+        if (!r.ok) throw new Error(`Failed to delete assignment: ${r.status}`);
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-assignments"] });
+    },
+  });
+}
+
+export interface CreateAssignmentParams {
+  fsmState: string;
+  role: string;
+  tool: AgentTool;
+}
+
+export function useCreateAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: CreateAssignmentParams) =>
+      fetch(`${API}/api/agent-assignments/${params.fsmState}/${params.role}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: params.tool, enabled: true, auto_launch: false }),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Failed to create assignment: ${r.status}`);
+        return r.json() as Promise<AgentAssignment>;
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agent-assignments"] });
     },

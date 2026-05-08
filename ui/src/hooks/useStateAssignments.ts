@@ -34,6 +34,7 @@ export function useUpdateStateAssignments(fsmState: string) {
         prompt_override: assignment.prompt_override,
         mcps: assignment.mcps,
         auto_launch: assignment.auto_launch,
+        skills: assignment.skills,
       }),
     saveAll: async (assignments: AgentAssignment[]) => {
       await Promise.all(
@@ -47,6 +48,7 @@ export function useUpdateStateAssignments(fsmState: string) {
             prompt_override: a.prompt_override,
             mcps: a.mcps,
             auto_launch: a.auto_launch,
+            skills: a.skills,
           })
         )
       );

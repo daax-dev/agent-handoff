@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export const SUPPORTED_TOOLS = ["claude-code", "codex", "cursor", "copilot-cli", "gemini", "aider", "human"] as const;
+export const SUPPORTED_TOOLS = ["claude-code", "codex", "cursor", "copilot-cli", "gemini", "human"] as const;
 export type AgentTool = (typeof SUPPORTED_TOOLS)[number];
 
 export const TOOL_LABELS: Record<AgentTool, string> = {
@@ -9,7 +9,6 @@ export const TOOL_LABELS: Record<AgentTool, string> = {
   "cursor":       "Cursor",
   "copilot-cli":  "Copilot CLI",
   "gemini":       "Gemini",
-  "aider":        "Aider",
   "human":        "Human (HITL)",
 };
 
@@ -24,6 +23,7 @@ export interface AgentAssignment {
   prompt_override: string | null;
   mcps: string[] | null;
   auto_launch: boolean;
+  skills: string[] | null;
 }
 
 interface RawRow {
@@ -37,9 +37,10 @@ interface RawRow {
   prompt_override: string | null;
   mcps: string | null;
   auto_launch: number;
+  skills: string | null;
 }
 
-function parseMcps(raw: string | null): string[] | null {
+function parseStringArray(raw: string | null): string[] | null {
   if (raw === null) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -47,7 +48,7 @@ function parseMcps(raw: string | null): string[] | null {
       return parsed as string[];
     }
   } catch {
-    // malformed JSON stored — treat as null
+    // malformed JSON — treat as null
   }
   return null;
 }
@@ -58,7 +59,8 @@ function toAssignment(row: RawRow): AgentAssignment {
     tool: row.tool as AgentTool,
     enabled: row.enabled === 1,
     auto_launch: row.auto_launch === 1,
-    mcps: parseMcps(row.mcps),
+    mcps: parseStringArray(row.mcps),
+    skills: parseStringArray(row.skills),
   };
 }
 
@@ -98,17 +100,24 @@ export interface UpsertParams {
   prompt_override?: string | null;
   mcps?: string[] | null;
   auto_launch?: boolean;
+  skills?: string[] | null;
+}
+
+export function deleteAssignment(db: Database, fsmState: string, role: string): boolean {
+  const result = db.run("DELETE FROM agent_assignments WHERE fsm_state = ? AND role = ?", [fsmState, role]);
+  return result.changes > 0;
 }
 
 export function upsertAssignment(db: Database, params: UpsertParams): AgentAssignment {
-  const { fsmState, role, tool, enabled = true, model = null, prompt_override = null, mcps, auto_launch = false } = params;
+  const { fsmState, role, tool, enabled = true, model = null, prompt_override = null, mcps, auto_launch = false, skills } = params;
   const now = new Date().toISOString();
   const id = `aa_${fsmState}_${role}`.replace(/[^a-z0-9_]/g, "_");
-  // Preserve distinction: null = "use defaults", [] = "explicitly no MCPs"
+  // Preserve null vs [] distinction: null = "use defaults", [] = "explicitly none"
   const mcpsJson = mcps === undefined || mcps === null ? null : JSON.stringify(mcps);
+  const skillsJson = skills === undefined || skills === null ? null : JSON.stringify(skills);
   db.run(
-    `INSERT INTO agent_assignments (id, fsm_state, role, tool, enabled, updated_at, model, prompt_override, mcps, auto_launch)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO agent_assignments (id, fsm_state, role, tool, enabled, updated_at, model, prompt_override, mcps, auto_launch, skills)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(fsm_state, role) DO UPDATE SET
        tool = excluded.tool,
        enabled = excluded.enabled,
@@ -116,8 +125,9 @@ export function upsertAssignment(db: Database, params: UpsertParams): AgentAssig
        model = excluded.model,
        prompt_override = excluded.prompt_override,
        mcps = excluded.mcps,
-       auto_launch = excluded.auto_launch`,
-    [id, fsmState, role, tool, enabled ? 1 : 0, now, model, prompt_override, mcpsJson, auto_launch ? 1 : 0]
+       auto_launch = excluded.auto_launch,
+       skills = excluded.skills`,
+    [id, fsmState, role, tool, enabled ? 1 : 0, now, model, prompt_override, mcpsJson, auto_launch ? 1 : 0, skillsJson]
   );
   return getAssignment(db, fsmState, role)!;
 }

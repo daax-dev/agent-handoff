@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAgentAssignments, useUpdateAssignment } from "@/hooks/useAgentAssignments";
 import { TOOL_LABELS, type AgentTool } from "@/types";
 
-const TOOLS: AgentTool[] = ["claude-code", "codex", "cursor", "copilot-cli", "gemini", "aider", "human"];
+const TOOLS: AgentTool[] = ["claude-code", "codex", "cursor", "copilot-cli", "gemini", "human"];
 
 export function AssignmentTable() {
   const { data: assignments = [], isLoading, isError } = useAgentAssignments();
