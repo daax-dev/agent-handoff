@@ -95,8 +95,9 @@ function shouldLogPrompts(): boolean {
 
 /**
  * Read the last non-empty line of a file.
- * Reads only the last 4096 bytes to avoid loading large daily JSONL logs
- * into memory — any single JSONL line fits comfortably within that window.
+ * Scans backwards in 8KB chunks until a complete line boundary is found,
+ * correctly handling JSONL lines of arbitrary length (e.g. large filesChanged
+ * arrays that exceed any fixed buffer size).
  * Returns null if the file doesn't exist or is empty.
  */
 async function readLastLine(filePath: string): Promise<string | null> {
@@ -105,12 +106,26 @@ async function readLastLine(filePath: string): Promise<string | null> {
     try {
       const { size } = fstatSync(fd);
       if (size === 0) return null;
-      const chunkSize = Math.min(4096, size);
-      const buf = Buffer.alloc(chunkSize);
-      readSync(fd, buf, 0, chunkSize, size - chunkSize);
-      const chunk = buf.toString("utf-8");
-      const lines = chunk.split("\n").filter((l) => l.trim().length > 0);
-      return lines.length > 0 ? lines[lines.length - 1] : null;
+      const CHUNK = 8192;
+      let offset = size;
+      let tail = "";
+      while (offset > 0) {
+        const chunkSize = Math.min(CHUNK, offset);
+        offset -= chunkSize;
+        const buf = Buffer.alloc(chunkSize);
+        readSync(fd, buf, 0, chunkSize, offset);
+        tail = buf.toString("utf-8") + tail;
+        // Strip any trailing newline, then look for the last complete line
+        const stripped = tail.replace(/\n$/, "");
+        const nlIdx = stripped.lastIndexOf("\n");
+        if (nlIdx !== -1 || offset === 0) {
+          // Found a newline boundary — last line is everything after it
+          const lastLine = stripped.slice(nlIdx + 1).trim();
+          return lastLine.length > 0 ? lastLine : null;
+        }
+        // No newline yet — keep reading backwards
+      }
+      return null;
     } finally {
       closeSync(fd);
     }

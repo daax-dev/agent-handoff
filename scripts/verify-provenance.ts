@@ -243,12 +243,19 @@ function verifyHandoffFile(filePath: string): ChainResult[] {
     try {
       entry = JSON.parse(line) as HandoffEntry;
     } catch {
-      results.push({
-        lineNumber: lineNum,
-        entryId: "N/A",
-        ok: false,
-        message: `invalid JSON on line ${lineNum}`,
-      });
+      const isLastLine = i === lines.length - 1;
+      const fileEndsWithNewline = content.endsWith("\n");
+      if (isLastLine && !fileEndsWithNewline) {
+        // Incomplete tail from an in-progress write — not a tampering indicator
+        results.push({
+          lineNumber: lineNum,
+          entryId: "N/A",
+          ok: true,
+          message: `line ${lineNum}: incomplete tail (in-progress write), skipped`,
+        });
+      } else {
+        results.push({ lineNumber: lineNum, entryId: "N/A", ok: false, message: `invalid JSON on line ${lineNum}` });
+      }
       continue;
     }
 

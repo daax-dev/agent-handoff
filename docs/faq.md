@@ -284,7 +284,7 @@ If any line in a handoff log file is edited (even a single character), `verify-p
 
 **Harsh verdict**
 
-The content-addressing and Merkle chain provide tamper-detection: any in-place edit to a log file or check run output will be caught by `bun run verify-provenance`. But this is not a cryptographic proof — a sophisticated attacker with write access to both the log files and the SQLite DB could regenerate consistent hashes. The next step is ed25519 signing of each entry (Phase 2, deferred) and optionally Sigstore Rekor upload (Phase 7, deferred).
+The content-addressing and Merkle chain provide tamper-detection: any in-place edit to a log file or check run output will be caught by `bun run verify-provenance` — *unless* the attacker also has write access to the SQLite DB and recomputes the affected hashes. For tamper-evidence against a local-write attacker, ed25519 signing (Phase 2, deferred) is required. But this is not a cryptographic proof — a sophisticated attacker with write access to both the log files and the SQLite DB could regenerate consistent hashes. The next step is ed25519 signing of each entry (Phase 2, deferred) and optionally Sigstore Rekor upload (Phase 7, deferred).
 
 **PRD needed? Partially addressed — remaining gaps:**
 
