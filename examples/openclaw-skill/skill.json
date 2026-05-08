@@ -96,7 +96,7 @@
       "name": "reject_hitl_gate",
       "method": "POST",
       "path": "/api/approvals/{approvalId}/reject",
-      "description": "Reject a pending HITL gate and return the ChangeSet to the previous state.",
+      "description": "Reject a pending HITL gate. For approve-gate rejections, the ChangeSet moves to changes_requested. For merge-gate rejections, it moves to abandoned.",
       "parameters": [
         {
           "name": "approvalId",

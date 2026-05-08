@@ -842,23 +842,32 @@ describe("Bearer token auth", () => {
     expect(res.status).toBe(200);
   });
 
-  test("protected route without Authorization header returns 401", async () => {
+  test("protected route without Authorization header returns 401 with WWW-Authenticate", async () => {
     const res = await fetch(`${authBase}/api/change-sets`);
     expect(res.status).toBe(401);
     const body = await res.json() as { error: string };
     expect(body.error).toBe("Unauthorized");
+    expect(res.headers.get("WWW-Authenticate")).toBe('Bearer realm="agent-handoff"');
   });
 
-  test("protected route with wrong token returns 401", async () => {
+  test("protected route with wrong token returns 401 with WWW-Authenticate", async () => {
     const res = await fetch(`${authBase}/api/change-sets`, {
       headers: { Authorization: "Bearer wrong-token" },
     });
     expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toBe('Bearer realm="agent-handoff"');
   });
 
   test("protected route with correct token returns 200", async () => {
     const res = await fetch(`${authBase}/api/change-sets`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("lowercase 'bearer' scheme with correct token is accepted", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: `bearer ${TEST_TOKEN}` },
     });
     expect(res.status).toBe(200);
   });

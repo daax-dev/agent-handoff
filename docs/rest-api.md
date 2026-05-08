@@ -162,7 +162,7 @@ A **Task** is a DB record representing a unit of structured work within a Change
 
 #### `POST /api/tasks`
 
-Create a task record. All path fields must refer to files that already exist in the worktree.
+Create a task record. Path fields are stored as-is; the server does not validate that they exist on disk. The caller is responsible for ensuring referenced files are present in the ChangeSet worktree before creating the task.
 
 **Request body:**
 ```json

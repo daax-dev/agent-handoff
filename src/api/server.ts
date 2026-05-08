@@ -96,9 +96,21 @@ export function createApiServer(options: ServerOptions) {
       // remote clients cannot bypass auth by spoofing the Origin header.
       if (apiToken && !(isUiOrigin(origin) && isLoopbackRequest(server, req))) {
         const authHeader = req.headers.get("Authorization") ?? "";
-        const expected = `Bearer ${apiToken}`;
-        if (authHeader !== expected) {
-          return addCors(json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401), origin);
+        const parts = authHeader.trim().split(/\s+/);
+        const scheme = parts[0] ?? "";
+        const token = parts[1] ?? "";
+        if (scheme.toLowerCase() !== "bearer" || token !== apiToken) {
+          const unauth = new Response(
+            JSON.stringify({ error: "Unauthorized", code: "UNAUTHORIZED" }),
+            {
+              status: 401,
+              headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": 'Bearer realm="agent-handoff"',
+              },
+            }
+          );
+          return addCors(unauth, origin);
         }
       }
 
