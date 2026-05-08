@@ -136,7 +136,8 @@
     "hitlGatedTriggers": [
       "roadmap_approved",
       "verification_passed",
-      "new_milestone"
+      "new_milestone",
+      "all_phases_done"
     ],
     "layout": {
       "roadmap_ready": {
