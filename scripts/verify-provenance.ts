@@ -312,7 +312,7 @@ function verifyHandoffFile(filePath: string): ChainResult[] {
 }
 
 function verifyHandoffLogs(taskId?: string): FileChainResult[] {
-  const handoffDir = join(process.cwd(), ".logs", "handoffs");
+  const handoffDir = process.env.HANDOFF_LOG_DIR ?? join(process.cwd(), ".logs", "handoffs");
 
   if (!existsSync(handoffDir)) {
     return [];

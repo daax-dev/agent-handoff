@@ -1,5 +1,5 @@
-import { appendFileSync, mkdirSync, existsSync } from "fs";
-import { appendFile, mkdir, readFile } from "fs/promises";
+import { appendFileSync, mkdirSync, existsSync, openSync, fstatSync, readSync, closeSync } from "fs";
+import { appendFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { createHash, randomUUID } from "node:crypto";
 import type { LogEntry, HandoffEvent } from "../types.js";
@@ -95,13 +95,25 @@ function shouldLogPrompts(): boolean {
 
 /**
  * Read the last non-empty line of a file.
+ * Reads only the last 4096 bytes to avoid loading large daily JSONL logs
+ * into memory — any single JSONL line fits comfortably within that window.
  * Returns null if the file doesn't exist or is empty.
  */
 async function readLastLine(filePath: string): Promise<string | null> {
   try {
-    const content = await readFile(filePath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
-    return lines.length > 0 ? lines[lines.length - 1] : null;
+    const fd = openSync(filePath, "r");
+    try {
+      const { size } = fstatSync(fd);
+      if (size === 0) return null;
+      const chunkSize = Math.min(4096, size);
+      const buf = Buffer.alloc(chunkSize);
+      readSync(fd, buf, 0, chunkSize, size - chunkSize);
+      const chunk = buf.toString("utf-8");
+      const lines = chunk.split("\n").filter((l) => l.trim().length > 0);
+      return lines.length > 0 ? lines[lines.length - 1] : null;
+    } finally {
+      closeSync(fd);
+    }
   } catch {
     return null;
   }
@@ -137,10 +149,12 @@ async function appendChained(logPath: string, entry: HandoffEvent): Promise<void
   });
   // Register this write as the new tail of the chain BEFORE awaiting, so
   // any write that arrives while we wait will chain after us, not after prevLock.
-  writeLockChain.set(logPath, prevLock.then(() => thisLock));
+  // Use .catch(()=>{}) so a rejected prevLock doesn't poison the chain — callers
+  // that arrive after a failed write will still be able to proceed.
+  writeLockChain.set(logPath, prevLock.catch(() => {}).then(() => thisLock));
 
   try {
-    await prevLock; // wait for the previous write to complete
+    await prevLock.catch(() => {}); // don't throw if previous write failed
 
     // Seed the cache on first write this session (reads last line from disk once).
     if (!lastHashCache.has(logPath)) {
@@ -159,8 +173,10 @@ async function appendChained(logPath: string, entry: HandoffEvent): Promise<void
 
     // Update cache with the hash of the line we just wrote (without \n).
     lastHashCache.set(logPath, sha256Hex(lineContent));
+  } catch (err) {
+    process.stderr.write(`[appendChained] Failed to write entry: ${err}\n`);
   } finally {
-    unlock();
+    unlock(); // always advance the chain so subsequent writers are not blocked
   }
 }
 

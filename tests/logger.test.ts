@@ -91,6 +91,7 @@ describe("logHandoffEvent", () => {
 
   test("writes event to handoffs JSONL log", async () => {
     const jobId = `hnd_event_${Date.now()}`;
+    const date = new Date().toISOString().split("T")[0]; // capture before write to avoid midnight flake
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "task_created",
@@ -99,7 +100,6 @@ describe("logHandoffEvent", () => {
       agent: "claude",
     });
 
-    const date = new Date().toISOString().split("T")[0];
     const logPath = join(handoffLogDir, `${date}.jsonl`);
     const entry = findLogEntry(logPath, jobId);
     expect(entry).toBeDefined();
@@ -112,6 +112,7 @@ describe("logHandoffEvent", () => {
     try {
       delete process.env.HANDOFF_LOG_PROMPTS;
 
+      const date = new Date().toISOString().split("T")[0]; // capture before write to avoid midnight flake
       await logHandoffEvent({
         timestamp: new Date().toISOString(),
         event: "task_created",
@@ -120,7 +121,6 @@ describe("logHandoffEvent", () => {
         prompt: "this is a secret prompt with API_KEY=abc123",
       });
 
-      const date = new Date().toISOString().split("T")[0];
       const logPath = join(handoffLogDir, `${date}.jsonl`);
       const entry = findLogEntry(logPath, jobId);
       expect(entry).toBeDefined();
@@ -142,6 +142,7 @@ describe("logHandoffEvent", () => {
       process.env.HANDOFF_LOG_PROMPTS = "true";
 
       const longPrompt = "x".repeat(600);
+      const date = new Date().toISOString().split("T")[0]; // capture before write to avoid midnight flake
       await logHandoffEvent({
         timestamp: new Date().toISOString(),
         event: "task_created",
@@ -150,7 +151,6 @@ describe("logHandoffEvent", () => {
         prompt: longPrompt,
       });
 
-      const date = new Date().toISOString().split("T")[0];
       const logPath = join(handoffLogDir, `${date}.jsonl`);
       const entry = findLogEntry(logPath, jobId);
       expect(entry).toBeDefined();
@@ -204,6 +204,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     setupIsolatedDir();
 
     const jobId = `hnd_chain_single_${Date.now()}`;
+    const date = new Date().toISOString().split("T")[0]; // capture before write to avoid midnight flake
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "task_created",
@@ -212,7 +213,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const date = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${date}.jsonl`);
     expect(existsSync(logPath)).toBe(true);
 
@@ -236,6 +236,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     const jobId1 = `hnd_chain_first_${Date.now()}`;
     const jobId2 = `hnd_chain_second_${Date.now()}`;
 
+    const date = new Date().toISOString().split("T")[0]; // capture before writes to avoid midnight flake
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "task_created",
@@ -252,7 +253,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const date = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${date}.jsonl`);
     const content = readFileSync(logPath, "utf-8");
     const lines = content.split("\n").filter((l) => l.trim().length > 0);
@@ -273,6 +273,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     setupIsolatedDir();
 
     const count = 8;
+    const date = new Date().toISOString().split("T")[0]; // capture before writes to avoid midnight flake
     const events = Array.from({ length: count }, (_, i) => ({
       timestamp: new Date().toISOString(),
       event: "task_created" as const,
@@ -284,7 +285,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     // Fire all writes concurrently — the mutex must serialize them correctly.
     await Promise.all(events.map((e) => logHandoffEvent(e)));
 
-    const date = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${date}.jsonl`);
     const content = readFileSync(logPath, "utf-8");
     const lines = content.split("\n").filter((l) => l.trim().length > 0);

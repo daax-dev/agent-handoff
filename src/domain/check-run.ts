@@ -107,38 +107,55 @@ export function updateCheckRun(
     }
   }
 
-  // Use a column-existence guard: if output_sha256 column exists (migration 015 applied), store it.
-  try {
-    db.run(
-      `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ?, output_sha256 = ?, subject_commit = ? WHERE id = ?`,
-      [
-        updates.status,
-        updates.output ?? null,
-        updates.exitCode ?? null,
-        updates.completedAt ?? null,
-        outputSha256,
-        subjectCommit,
-        id,
-      ]
-    );
-  } catch (err) {
-    // Migration 015 may not be applied in some test environments; fall back gracefully.
-    const errMsg = String(err);
-    if (errMsg.includes("output_sha256") || errMsg.includes("subject_commit")) {
-      process.stderr.write(`[check-run] output_sha256/subject_commit columns not available (migration 015 not applied?): ${err}\n`);
+  // Only overwrite output/output_sha256/subject_commit when output is explicitly provided.
+  // A status-only update (e.g. running → failed without new output) must not clobber
+  // evidence that was stored by a prior terminal update.
+  if (updates.output !== undefined) {
+    // Use a column-existence guard: if output_sha256 column exists (migration 015 applied), store it.
+    try {
       db.run(
-        `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+        `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ?, output_sha256 = ?, subject_commit = ? WHERE id = ?`,
         [
           updates.status,
-          updates.output ?? null,
+          updates.output,
           updates.exitCode ?? null,
           updates.completedAt ?? null,
+          outputSha256,
+          subjectCommit,
           id,
         ]
       );
-    } else {
-      throw err;
+    } catch (err) {
+      // Migration 015 may not be applied in some test environments; fall back gracefully.
+      const errMsg = String(err);
+      if (errMsg.includes("output_sha256") || errMsg.includes("subject_commit")) {
+        process.stderr.write(`[check-run] output_sha256/subject_commit columns not available (migration 015 not applied?): ${err}\n`);
+        db.run(
+          `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+          [
+            updates.status,
+            updates.output,
+            updates.exitCode ?? null,
+            updates.completedAt ?? null,
+            id,
+          ]
+        );
+      } else {
+        throw err;
+      }
     }
+  } else {
+    // No output provided — update only status/exit_code/completed_at and leave
+    // output, output_sha256, and subject_commit untouched.
+    db.run(
+      `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+      [
+        updates.status,
+        updates.exitCode ?? null,
+        updates.completedAt ?? null,
+        id,
+      ]
+    );
   }
 
   return getCheckRun(db, id)!;

@@ -241,7 +241,7 @@ This is the best-designed part of the system. The git worktree model gives you t
 |----------|----------|-----------------|
 | Check run hashes | SQLite `check_runs.output_sha256` | SHA-256 of output, recomputable from stored data |
 | Check run commit | SQLite `check_runs.subject_commit` | git HEAD SHA at time of run |
-| Handoff Merkle chain | `.logs/handoffs/{date}.jsonl` | Each entry hashes its predecessor; breaks on any edit |
+| Handoff Merkle chain | `.logs/handoffs/{date}.jsonl` | Each entry hashes its predecessor; tampering with any entry (except the current tail) is detectable immediately. Tail-entry edits become detectable when the next entry is written. |
 | Decision log | `.work/tasks/{id}/decisions.jsonl` | Append-only by convention |
 | HITL gates | Enforced by FSM | `approve` and `merge` require explicit human call |
 
@@ -251,9 +251,11 @@ This is the best-designed part of the system. The git worktree model gives you t
 # Verify everything (all check run hashes + all handoff log chains)
 bun run verify-provenance
 
-# Verify a specific task
+# Verify all provenance for task TSK-000001 check runs (full handoff chain is always verified)
 bun run verify-provenance TSK-000001
 ```
+
+Note: when a task ID is supplied, check run verification is scoped to that task, but the full handoff Merkle chain is always verified in its entirety.
 
 Output example:
 ```
