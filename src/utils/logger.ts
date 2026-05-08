@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, existsSync } from "fs";
-import { appendFile, mkdir } from "fs/promises";
+import { appendFile, mkdir, readFile } from "fs/promises";
 import { join } from "path";
+import { createHash, randomUUID } from "node:crypto";
 import type { LogEntry, HandoffEvent } from "../types.js";
 
 function getLogPath(): string {
@@ -68,12 +69,36 @@ function shouldLogPrompts(): boolean {
 }
 
 /**
+ * Read the last non-empty line of a file.
+ * Returns null if the file doesn't exist or is empty.
+ */
+async function readLastLine(filePath: string): Promise<string | null> {
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    return lines.length > 0 ? lines[lines.length - 1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compute SHA-256 hex digest of a UTF-8 string.
+ */
+function sha256Hex(content: string): string {
+  return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+/**
  * Log a handoff event to the JSONL log file.
+ * Implements a per-file Merkle chain: each entry includes the SHA-256 hash
+ * of the previous entry in the same daily log file.
+ *
  * Safe for fire-and-forget usage — never rejects. Errors are written to stderr.
  */
 export async function logHandoffEvent(event: HandoffEvent): Promise<void> {
   try {
-    const entry = { ...event };
+    const entry: HandoffEvent = { ...event };
     // Strip prompt unless opt-in via env var (prompts may contain secrets)
     if (entry.prompt) {
       if (shouldLogPrompts()) {
@@ -82,11 +107,27 @@ export async function logHandoffEvent(event: HandoffEvent): Promise<void> {
         entry.prompt = `[redacted, ${event.prompt!.length} chars]`;
       }
     }
-    const line = JSON.stringify(entry) + "\n";
+
+    // Assign a unique entry ID
+    entry.entryId = randomUUID();
+
+    // Compute Merkle chain: hash the last line of the current log file
     const dir = getHandoffLogDir();
     await ensureHandoffLogDir(dir);
     const date = new Date().toISOString().split("T")[0];
     const logPath = join(dir, `${date}.jsonl`);
+
+    try {
+      const lastLine = await readLastLine(logPath);
+      if (lastLine !== null) {
+        entry.prevEntryHash = sha256Hex(lastLine);
+      }
+      // If no last line (first entry in file), prevEntryHash is absent
+    } catch (chainErr) {
+      process.stderr.write(`[logger] Warning: failed to compute prevEntryHash (chain may be broken): ${chainErr}\n`);
+    }
+
+    const line = JSON.stringify(entry) + "\n";
     await appendFile(logPath, line);
   } catch (err) {
     process.stderr.write(`Failed to write handoff event: ${err}\n`);

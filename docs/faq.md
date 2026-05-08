@@ -235,24 +235,55 @@ This is the best-designed part of the system. The git worktree model gives you t
 {"id":"DEC-000042","task_id":"TSK-000001","change_set_id":"CS-000001","topic":"Rate limit storage backend","options_considered":["in-memory","Redis","Valkey"],"choice":"in-memory","rationale":"Redis not available in dev; documented limitation acceptable for MVP","sources_cited":null,"author_agent":"claude-code","ts":"2026-05-08T14:32:11.000Z"}
 ```
 
+**What exists today — content-addressed check runs and a Merkle-chained handoff log (Phase 1 + Phase 3):**
+
+| Artifact | Location | Tamper detection |
+|----------|----------|-----------------|
+| Check run hashes | SQLite `check_runs.output_sha256` | SHA-256 of output, recomputable from stored data |
+| Check run commit | SQLite `check_runs.subject_commit` | git HEAD SHA at time of run |
+| Handoff Merkle chain | `.logs/handoffs/{date}.jsonl` | Each entry hashes its predecessor; breaks on any edit |
+| Decision log | `.work/tasks/{id}/decisions.jsonl` | Append-only by convention |
+| HITL gates | Enforced by FSM | `approve` and `merge` require explicit human call |
+
+**Verifying the audit trail:**
+
+```bash
+# Verify everything (all check run hashes + all handoff log chains)
+bun run verify-provenance
+
+# Verify a specific task
+bun run verify-provenance TSK-000001
+```
+
+Output example:
+```
+=== Check Runs ===
+✓ chk_000001  typecheck  passed  sha256:e3b0c44298fc... matches
+✓ chk_000002  lint       passed  sha256:abc12345678... matches
+
+=== Handoff Merkle Chain (2026-05-08.jsonl) ===
+✓ line-1  <uuid>  chain start (no prev)
+✓ line-2  <uuid>  chain valid
+✓ line-3  <uuid>  chain valid
+
+RESULT: PASS
+```
+
+If any line in a handoff log file is edited (even a single character), `verify-provenance` will detect the chain break and exit 1.
+
 **What does NOT exist:**
-- No cryptographic signing of any artifact
+- No cryptographic signing of any artifact (ed25519 signatures are deferred to Phase 2)
 - No SLSA attestation (no in-toto link metadata, no provenance predicate)
 - No SBOM generation
-- No content-addressable storage (logs are flat files, mutable)
 - The audit trail is append-only by **convention**, not by enforcement — a sufficiently privileged process can edit `.jsonl` files or the SQLite database
 - No signed document you could hand to a compliance officer as tamper-evident proof
 
 **Harsh verdict**
 
-This is the biggest gap in the system. The audit trail is genuinely useful for debugging and retrospective review — decisions.jsonl in particular is well-designed. But the question asked specifically about "signed document of proof for test results and build provenance," and the honest answer is: **that doesn't exist today.** A developer trying to satisfy an SOC 2, FedRAMP, or SLSA Level 2 requirement with agent-handoff would hit a wall immediately. The logs are good raw material but they're not proof.
+The content-addressing and Merkle chain provide tamper-detection: any in-place edit to a log file or check run output will be caught by `bun run verify-provenance`. But this is not a cryptographic proof — a sophisticated attacker with write access to both the log files and the SQLite DB could regenerate consistent hashes. The next step is ed25519 signing of each entry (Phase 2, deferred) and optionally Sigstore Rekor upload (Phase 7, deferred).
 
-**PRD needed? Yes — "Cryptographic build provenance for ChangeSets"**
+**PRD needed? Partially addressed — remaining gaps:**
 
-Scope:
-1. **Signed check run attestations**: After each check run passes, generate an in-toto link file (JSON) containing: subject (ChangeSet ID + git commit SHA), predicate type (`https://slsa.dev/provenance/v1`), builder (agent ID + tool + model), run environment (hostname, timestamp), and SHA-256 of the check output. Sign with a local key pair (key stored in `.work/keys/`), or optionally push to Sigstore's Rekor transparency log.
-2. **ChangeSet provenance bundle**: At merge time, collect all check run attestations + decisions.jsonl + HITL approval record into a signed bundle (`.work/tasks/{id}/provenance.bundle.json`). Bundle hash stored in the merge commit message.
-3. **Verification command**: `bun run verify-provenance TSK-000001` — validates all signatures in the bundle and prints a human-readable report.
-4. **Export to GitHub**: Optionally attach the provenance bundle as a GitHub release asset or commit it to a `provenance/` branch.
-
-Minimum viable version: SHA-256 hash of each check run output stored in SQLite, final bundle hash committed to the merge commit. Not cryptographically signed but content-addressable — enough to detect tampering.
+1. **Ed25519 signing** (Phase 2, deferred): Sign each check run attestation and handoff entry with a local key pair so tampering cannot regenerate valid signatures even with DB access.
+2. **ChangeSet provenance bundle** (Phase 4, deferred): At merge time, collect all check run attestations + decisions.jsonl + HITL approval record into a signed bundle.
+3. **Export to GitHub** (Phase 6/7, deferred): Attach provenance bundle as a GitHub release asset or push to Sigstore's Rekor transparency log.
