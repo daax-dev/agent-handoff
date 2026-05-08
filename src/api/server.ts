@@ -55,6 +55,7 @@ export function createApiServer(options: ServerOptions) {
   const sse = options.sse ?? defaultBroadcaster;
   const repoRoot = options.repoRoot;
   const port = options.port ?? parseInt(process.env.PORT ?? "4000", 10);
+  const apiToken = process.env.API_TOKEN || "";
 
   const server = Bun.serve({
     port,
@@ -68,9 +69,19 @@ export function createApiServer(options: ServerOptions) {
         return new Response(null, { status: 204, headers: corsHeaders(origin) });
       }
 
-      // Health
+      // Health — always exempt from auth
       if (req.method === "GET" && path === "/api/health") {
         return addCors(json({ ok: true, ts: new Date().toISOString() }), origin);
+      }
+
+      // Bearer token auth — opt-in when API_TOKEN is set
+      // Exempt: health (above), OPTIONS (above), requests from allowed localhost origins (UI)
+      if (apiToken && !isAllowedOrigin(origin)) {
+        const authHeader = req.headers.get("Authorization") ?? "";
+        const expected = `Bearer ${apiToken}`;
+        if (authHeader !== expected) {
+          return addCors(json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401), origin);
+        }
       }
 
       // SSE events stream
