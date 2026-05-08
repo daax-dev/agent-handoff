@@ -123,7 +123,7 @@ Advance the ChangeSet FSM via a named trigger. Returns the updated ChangeSet, or
 { "trigger": "plan_accepted" }
 ```
 
-Available FSM triggers:
+All FSM triggers:
 
 | Trigger | From state | To state |
 |---------|-----------|---------|
@@ -134,6 +134,9 @@ Available FSM triggers:
 | `approve` | `reviewing` | `approved` (HITL gate — returns 202) |
 | `pick_up_revision` | `changes_requested` | `implementing` |
 | `merge` | `approved` | `merged` (HITL gate) |
+| `merge_conflict_detected` | `approved` | `conflict_detected` |
+| `conflict_reopen` | `conflict_detected` | `implementing` |
+| `conflict_resolved` | `conflict_detected` | `reviewing` |
 | `abandon` | any | `abandoned` |
 
 ```bash
@@ -216,6 +219,16 @@ curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/approve" \
 #### `POST /api/approvals/:approvalId/reject`
 
 Reject a pending HITL gate.
+
+**Request body:**
+```json
+{
+  "reason": "string (required)",
+  "decided_by": "string (optional)"
+}
+```
+
+> **Note:** `reason` is required. The server returns `400 Bad Request` if it is omitted.
 
 ```bash
 curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/reject" \
