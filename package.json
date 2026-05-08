@@ -1,7 +1,7 @@
 {
   "name": "@daax-dev/agent-handoff",
   "version": "0.1.0",
-  "description": "MCP server for cross-agent task delegation — hand off work between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode, Aider) via CLI spawn or A2A protocol",
+  "description": "MCP server for cross-agent task delegation — hand off work between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode) via CLI spawn or A2A protocol",
   "author": "Peregrine Summit",
   "license": "Apache-2.0",
   "type": "module",
