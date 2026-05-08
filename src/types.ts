@@ -34,6 +34,13 @@ export interface Job {
   artifacts?: A2AArtifactResult[];
   // Error
   error?: string;
+  // Context serialization (#18)
+  contextPayload?: string;
+  // Handshake (#19)
+  handshakeStatus?: "pending" | "accepted" | "rejected";
+  handshakeRejectionReason?: string;
+  /** SPIFFE ID of the sending agent; stored for future SVID-based verification */
+  senderSpiffeId?: string;
 }
 
 export interface A2AArtifactResult {
@@ -52,6 +59,12 @@ export interface HandoffTaskInput {
   timeoutMs?: number;
   pool?: boolean;
   requiredCapabilities?: string[];
+  /** Serialized HandoffContext (base64) for multi-session task continuation (#18) */
+  contextPayload?: string;
+  /** SPIFFE ID of the sender; stored on the job for future SVID-based verification (not yet enforced) */
+  senderSpiffeId?: string;
+  /** DoD criteria for two-phase handshake (#19) */
+  dodCriteria?: Array<{ id: string; description: string; required?: boolean }>;
 }
 
 export interface CheckStatusInput {
@@ -187,7 +200,15 @@ export type HandoffEventType =
   | "pool_submitted"
   | "worker_registered"
   | "worker_first_heartbeat"
-  | "agent_registered";
+  | "agent_registered"
+  // Auth / SVID events (#17)
+  | "svid_verified"
+  | "svid_rejected"
+  // Handshake events (#19)
+  | "handshake_proposed"
+  | "handshake_accepted"
+  | "handshake_rejected"
+  | "handshake_ack_timeout";
 
 export interface HandoffEvent {
   timestamp: string;
