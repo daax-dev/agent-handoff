@@ -19,7 +19,7 @@ When `API_TOKEN` is set:
 - `GET /api/health` is always exempt
 - Requests from the Vite UI dev-server (localhost ports 5173–5182) are always exempt
 
-> **Note:** Origin-based exemption is bypassable by non-browser clients that can send arbitrary `Origin` headers. This is a known trade-off for a local dev tool — for production use, require the token on all callers.
+> **Note:** Origin-based exemption only applies when the request also originates from a loopback address (127.0.0.1 / ::1), so remote clients cannot bypass auth by spoofing the Origin header. For production use, require the token on all callers.
 
 ### Curl examples — with auth
 
@@ -137,7 +137,7 @@ All FSM triggers:
 | `merge_conflict_detected` | `approved` | `conflict_detected` |
 | `conflict_reopen` | `conflict_detected` | `implementing` |
 | `conflict_resolved` | `conflict_detected` | `reviewing` |
-| `abandon` | any | `abandoned` |
+| `abandon` | `draft`, `planned`, `implementing`, `reviewing`, `changes_requested`, `approved`, `conflict_detected` | `abandoned` |
 
 ```bash
 # Advance to planned
