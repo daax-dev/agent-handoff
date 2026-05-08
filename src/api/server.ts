@@ -18,8 +18,23 @@ import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  // Allow any localhost port in API range (4000-4009) or UI range (5173-5182)
-  return /^http:\/\/(localhost|127\.0\.0\.1):(4\d{3}|517[3-9]|518[0-2])$/.test(origin);
+  // Allow API server ports (4000-4009) or Vite UI dev-server ports (5173-5182)
+  return /^http:\/\/(localhost|127\.0\.0\.1):(400[0-9]|517[3-9]|518[0-2])$/.test(origin);
+}
+
+// Narrower predicate used only for bearer-auth exemption when
+// API_TOKEN_ALLOW_UI_ORIGIN_BYPASS=1 is explicitly set.
+function isUiOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  return /^http:\/\/(localhost|127\.0\.0\.1):(517[3-9]|518[0-2])$/.test(origin);
+}
+
+// Guard that ensures the TCP connection is from a loopback address.
+// Used together with isUiOrigin when the bypass flag is enabled.
+function isLoopbackRequest(server: ReturnType<typeof Bun.serve>, req: Request): boolean {
+  const ip = server.requestIP(req);
+  if (!ip) return false;
+  return ip.address === "127.0.0.1" || ip.address === "::1";
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -55,6 +70,8 @@ export function createApiServer(options: ServerOptions) {
   const sse = options.sse ?? defaultBroadcaster;
   const repoRoot = options.repoRoot;
   const port = options.port ?? parseInt(process.env.PORT ?? "4000", 10);
+  const apiToken = process.env.API_TOKEN || "";
+  const allowUiOriginBypass = process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS === "1";
 
   const server = Bun.serve({
     port,
@@ -68,9 +85,35 @@ export function createApiServer(options: ServerOptions) {
         return new Response(null, { status: 204, headers: corsHeaders(origin) });
       }
 
-      // Health
+      // Health — always exempt from auth
       if (req.method === "GET" && path === "/api/health") {
         return addCors(json({ ok: true, ts: new Date().toISOString() }), origin);
+      }
+
+      // Bearer token auth — opt-in when API_TOKEN is set.
+      // By default ALL routes (except health and OPTIONS) require the token.
+      // Set API_TOKEN_ALLOW_UI_ORIGIN_BYPASS=1 to also exempt Vite UI dev-server
+      // origins (5173-5182) on loopback connections — useful for local dev but
+      // should NOT be enabled behind a reverse proxy because the proxy forwards
+      // traffic as loopback, allowing remote clients to spoof the Origin header.
+      if (apiToken && !(allowUiOriginBypass && isUiOrigin(origin) && isLoopbackRequest(server, req))) {
+        const authHeader = req.headers.get("Authorization") ?? "";
+        const parts = authHeader.trim().split(/\s+/);
+        const scheme = parts[0] ?? "";
+        const token = parts[1] ?? "";
+        if (scheme.toLowerCase() !== "bearer" || token !== apiToken) {
+          const unauth = new Response(
+            JSON.stringify({ error: "Unauthorized", code: "UNAUTHORIZED" }),
+            {
+              status: 401,
+              headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": 'Bearer realm="agent-handoff"',
+              },
+            }
+          );
+          return addCors(unauth, origin);
+        }
       }
 
       // SSE events stream

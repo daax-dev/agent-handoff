@@ -1,0 +1,123 @@
+{
+  "name": "agent-handoff",
+  "description": "Coordinate multi-agent AI development workflows via agent-handoff. Create ChangeSets, advance FSM states, and manage HITL approval gates.",
+  "version": "1.0.0",
+  "base_url": "http://localhost:4000",
+  "auth": {
+    "type": "bearer",
+    "env_var": "AGENT_HANDOFF_TOKEN"
+  },
+  "endpoints": [
+    {
+      "name": "health_check",
+      "method": "GET",
+      "path": "/api/health",
+      "description": "Check if the agent-handoff server is running. No auth required.",
+      "parameters": []
+    },
+    {
+      "name": "create_change_set",
+      "method": "POST",
+      "path": "/api/change-sets/quick-create",
+      "description": "Create a new ChangeSet with a title. Auto-generates the task ID, branch name, and worktree path. Returns the ChangeSet ID needed for subsequent calls.",
+      "parameters": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Human-readable title for the task, e.g. 'Add rate limiting to POST /api/users'"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false,
+          "description": "Optional extended description of the task."
+        }
+      ]
+    },
+    {
+      "name": "get_change_set",
+      "method": "GET",
+      "path": "/api/change-sets/{id}",
+      "description": "Get a ChangeSet by ID. Use this to poll the FSM status. Status values: draft, planned, implementing, reviewing, changes_requested, approved, merged, conflict_detected, escalated, awaiting_human_approval, abandoned.",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "ChangeSet ID in chg_NNNNNN format, as returned by create_change_set"
+        }
+      ]
+    },
+    {
+      "name": "advance_fsm",
+      "method": "PATCH",
+      "path": "/api/change-sets/{id}/status",
+      "description": "Advance the ChangeSet FSM via a named trigger. Returns the updated ChangeSet, or 202 with approvalId when a HITL gate is hit (e.g. approve, merge). Available triggers: plan_accepted, assign_implementer, submit_for_review, request_changes, approve, pick_up_revision, merge, abandon.",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "ChangeSet ID in chg_NNNNNN format"
+        },
+        {
+          "name": "trigger",
+          "type": "string",
+          "required": true,
+          "description": "FSM trigger name. Common values: plan_accepted, assign_implementer, submit_for_review, approve, merge"
+        }
+      ]
+    },
+    {
+      "name": "approve_hitl_gate",
+      "method": "POST",
+      "path": "/api/approvals/{approvalId}/approve",
+      "description": "Approve a pending HITL gate. Use the approvalId returned by a 202 response from advance_fsm. Always send a JSON body (at minimum {}) — the server requires a parseable request body even when decided_by is omitted.",
+      "parameters": [
+        {
+          "name": "approvalId",
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "UUID returned in the approvalId field of a 202 response"
+        },
+        {
+          "name": "decided_by",
+          "type": "string",
+          "required": false,
+          "description": "Identity of the approver, e.g. 'openclaw-skill' or a user name. Stored in the audit log."
+        }
+      ]
+    },
+    {
+      "name": "reject_hitl_gate",
+      "method": "POST",
+      "path": "/api/approvals/{approvalId}/reject",
+      "description": "Reject a pending HITL gate. For approve-gate rejections, the ChangeSet moves to changes_requested. For merge-gate rejections, it moves to abandoned.",
+      "parameters": [
+        {
+          "name": "approvalId",
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "UUID returned in the approvalId field of a 202 response"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "required": true,
+          "description": "Reason for rejection. Stored in the audit log."
+        },
+        {
+          "name": "decided_by",
+          "type": "string",
+          "required": false,
+          "description": "Identity of the rejector."
+        }
+      ]
+    }
+  ]
+}

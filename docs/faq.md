@@ -8,29 +8,29 @@
 
 **Today's answer**
 
-OpenClaw ([openclaw.ai](https://openclaw.ai)) is a local-first personal AI assistant with multi-agent support, browser control, and a skill plugin system. It does **not** currently support MCP (Model Context Protocol). That means there is no drop-in integration path — you cannot register agent-handoff as an MCP server inside OpenClaw the way you would with Claude Code, Cursor, or Windsurf.
+OpenClaw ([openclaw.ai](https://openclaw.ai)) is a local-first personal AI assistant with multi-agent support, browser control, and a skill plugin system. It does **not** currently support MCP (Model Context Protocol). That means you cannot register agent-handoff as an MCP server inside OpenClaw the way you would with Claude Code, Cursor, or Windsurf.
 
-Two workarounds exist today:
+Three integration paths exist today:
 
-**Option A — A2A bridge** (lower effort): Wrap agent-handoff's REST API in an OpenClaw skill plugin. Your OpenClaw skill would:
-1. Call `POST /api/change-sets` to create a ChangeSet
-2. Call `POST /api/tasks` to queue work
-3. Poll `GET /api/jobs/:id` for results
+**Option A — REST API + OpenClaw skill plugin** (recommended): Use the documented REST API directly from an OpenClaw skill. A ready-to-use skill descriptor and setup guide live in [`examples/openclaw-skill/`](../examples/openclaw-skill/). Your OpenClaw skill:
+1. Calls `POST /api/change-sets/quick-create` with just a `title` — auto-generates the task ID, branch, and worktree path
+2. Advances the FSM via `PATCH /api/change-sets/:id/status` with triggers (`plan_accepted`, `assign_implementer`, `submit_for_review`, `approve`, `merge`)
+3. Polls `GET /api/change-sets/:id` until `.status` reaches the desired state
+4. When a HITL gate returns `202 + approvalId`, calls `POST /api/approvals/:approvalId/approve` to advance past it
 
-OpenClaw's skill system can make HTTP calls, so this is implementable with a custom plugin.
+See [`docs/rest-api.md`](rest-api.md) for the full API reference with correct trigger names, curl examples, auth setup, and a complete end-to-end workflow.
+
+**Optional: secure the API with a bearer token.** Set `API_TOKEN=your-secret-token` when starting agent-handoff. The skill will send `Authorization: Bearer <token>` on every request. The health endpoint is always exempt; Vite UI dev-server origins (ports 5173–5182) are exempt only when the request also originates from a loopback address (127.0.0.1/::1).
 
 **Option B — Use Claude Code as the thin orchestrator layer**: Run Claude Code with agent-handoff registered as an MCP server (`claude mcp add agent-handoff -- bun run <path>/src/index.ts`). Point OpenClaw's automation at the Claude Code session as the decision-maker. OpenClaw triggers intent; Claude Code + agent-handoff do the SDLC coordination.
 
-Neither option is a first-class integration today. There is no `openclaw` entry in `src/cli/registry.ts` and no A2A adapter for OpenClaw's skill protocol.
+**Option C — CLI scripting**: Use the agent-handoff CLI directly from shell scripts that OpenClaw invokes. This is lower effort than a full skill plugin but less composable.
 
 **Harsh verdict**
 
-The developer experience here is **poor**. OpenClaw users get zero documentation, zero examples, and no supported path. They hit a dead end immediately. The REST API exists but is undocumented as a public interface and has no auth story for external callers.
+The REST API path (Option A) is now documented and has a working skill descriptor. Start with `examples/openclaw-skill/` — it has a complete setup guide and a shell script showing the full implementation → review → HITL approval flow.
 
-**PRD needed? Yes — "OpenClaw Integration"**
-- Publish the REST API as a documented external interface with optional bearer token auth
-- Write an OpenClaw skill plugin (JSON descriptor + HTTP calls to agent-handoff)
-- Example workflow: OpenClaw receives "build feature X" via Discord → skill creates ChangeSet → agent-handoff runs the FSM → OpenClaw reports results back to Discord
+**PRD needed? No** — Option A is now first-class. A future improvement would be auto-generating the skill descriptor from the OpenAPI spec, and adding a `POST /api/change-sets/:id/approve` shortcut that wraps the two-step HITL flow.
 
 ---
 

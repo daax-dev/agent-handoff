@@ -17,7 +17,10 @@ let sse: SSEBroadcaster;
 let server: ReturnType<typeof Bun.serve>;
 let BASE: string;
 
+let topLevelApiToken: string | undefined;
 beforeAll(() => {
+  topLevelApiToken = process.env.API_TOKEN;
+  delete process.env.API_TOKEN; // ensure server starts without auth
   db = openTestDb(MIGRATIONS_DIR);
   sse = new SSEBroadcaster();
   const result = createApiServer({ db, sse, port: 0 }); // port 0 = random
@@ -26,6 +29,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  if (topLevelApiToken === undefined) {
+    delete process.env.API_TOKEN;
+  } else {
+    process.env.API_TOKEN = topLevelApiToken;
+  }
   sse.close();
   server.stop(true);
   db.close();
@@ -807,5 +815,124 @@ describe("POST /api/change-sets/from-github-issue writes spec.md (PRD-017)", () 
     expect(res.status).toBe(201);
     const cs = (await res.json()) as { task_id: string; spec_content: null };
     expect(cs.spec_content).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bearer token auth (API_TOKEN)
+// ---------------------------------------------------------------------------
+
+describe("Bearer token auth", () => {
+  const TEST_TOKEN = "test-bearer-secret-99";
+  let authServer: ReturnType<typeof Bun.serve>;
+  let authBase: string;
+
+  let previousApiToken: string | undefined;
+  beforeAll(() => {
+    previousApiToken = process.env.API_TOKEN;
+    process.env.API_TOKEN = TEST_TOKEN;
+    const result = createApiServer({ db, sse, port: 0 });
+    authServer = result.server;
+    authBase = `http://localhost:${authServer.port}`;
+  });
+
+  afterAll(() => {
+    if (previousApiToken === undefined) {
+      delete process.env.API_TOKEN;
+    } else {
+      process.env.API_TOKEN = previousApiToken;
+    }
+    authServer.stop(true);
+  });
+
+  test("GET /api/health is always exempt — returns 200 without token", async () => {
+    const res = await fetch(`${authBase}/api/health`);
+    expect(res.status).toBe(200);
+  });
+
+  test("protected route without Authorization header returns 401 with WWW-Authenticate", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`);
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("Unauthorized");
+    expect(res.headers.get("WWW-Authenticate")).toBe('Bearer realm="agent-handoff"');
+  });
+
+  test("protected route with wrong token returns 401 with WWW-Authenticate", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: "Bearer wrong-token" },
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toBe('Bearer realm="agent-handoff"');
+  });
+
+  test("protected route with correct token returns 200", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("lowercase 'bearer' scheme with correct token is accepted", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: `bearer ${TEST_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("UI origin (localhost:5173) is NOT exempt by default — requires token", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Origin: "http://localhost:5173" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("UI origin (localhost:5173) is exempt when API_TOKEN_ALLOW_UI_ORIGIN_BYPASS=1", async () => {
+    const previousBypass = process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS;
+    process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS = "1";
+    const result = createApiServer({ db, sse, port: 0 });
+    const bypassServer = result.server;
+    const bypassBase = `http://localhost:${bypassServer.port}`;
+    try {
+      const res = await fetch(`${bypassBase}/api/change-sets`, {
+        headers: { Origin: "http://localhost:5173" },
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      bypassServer.stop(true);
+      if (previousBypass === undefined) {
+        delete process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS;
+      } else {
+        process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS = previousBypass;
+      }
+    }
+  });
+
+  test("API port origin (localhost:4000) is NOT exempt — requires token", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Origin: "http://localhost:4000" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("server without API_TOKEN set passes all requests through", async () => {
+    const previousApiToken = process.env.API_TOKEN;
+    delete process.env.API_TOKEN;
+
+    const result = createApiServer({ db, sse, port: 0 });
+    const unauthServer = result.server;
+    const unauthBase = `http://localhost:${unauthServer.port}`;
+
+    try {
+      const res = await fetch(`${unauthBase}/api/change-sets`);
+      expect(res.status).toBe(200);
+    } finally {
+      unauthServer.stop(true);
+      if (previousApiToken === undefined) {
+        delete process.env.API_TOKEN;
+      } else {
+        process.env.API_TOKEN = previousApiToken;
+      }
+    }
   });
 });
