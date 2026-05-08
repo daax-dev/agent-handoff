@@ -72,6 +72,7 @@ export class CheckRunner {
         output,
         exitCode,
         completedAt: new Date().toISOString(),
+        worktreePath,
       });
     }
   }

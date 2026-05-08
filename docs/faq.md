@@ -271,7 +271,7 @@ RESULT: PASS
 
 If any line in a handoff log file is edited (even a single character), `verify-provenance` will detect the chain break and exit 1.
 
-**Note:** Running `bun run test` writes concurrent handoff events into the current day's log file (`.logs/handoffs/{today}.jsonl`). Because the test suite runs many events in parallel, some log entries will share the same `prevEntryHash` (documented acceptable behavior — the chain is correct for sequential writes, but not for concurrent writes). This means `verify-provenance` may show chain breaks on the current day's file immediately after running tests. This is expected and is not a sign of tampering.
+**Note:** Verification is most reliable on rotated daily log files (previous days). Today's active file is still being written to, so the tail may be incomplete while a write is in progress. Writes are serialized per log path via an in-process mutex, so both sequential and concurrent production writes produce a valid chain. If you run `verify-provenance` on today's file mid-write you may see one incomplete tail entry, which is normal — re-run after the write completes and the chain will be intact.
 
 **What does NOT exist:**
 - No cryptographic signing of any artifact (ed25519 signatures are deferred to Phase 2)

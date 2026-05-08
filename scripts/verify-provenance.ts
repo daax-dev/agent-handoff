@@ -18,7 +18,6 @@ import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
-import { runMigrations } from "../src/migrations/runner.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,7 +31,7 @@ function shortHash(hash: string): string {
   return hash.slice(0, 12) + "...";
 }
 
-/** Open the SQLite DB (read-only friendly, but we need run/migrations). */
+/** Open the SQLite DB for read-only verification (no schema mutations). */
 function openDb(): Database {
   const dbPath =
     process.env.DB_PATH ?? resolve(process.cwd(), ".work", "agent-handoff.db");
@@ -45,7 +44,8 @@ function openDb(): Database {
 
   const db = new Database(dbPath);
   db.exec("PRAGMA foreign_keys = ON;");
-  runMigrations(db);
+  // Do NOT call runMigrations — a verification tool must not mutate the evidence
+  // it is verifying. Column-existence is handled gracefully in verifyCheckRuns().
   return db;
 }
 

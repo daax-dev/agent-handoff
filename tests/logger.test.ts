@@ -1,7 +1,14 @@
-import { describe, test, expect } from "./test-compat.js";
+import { describe, test, expect, afterEach } from "./test-compat.js";
 import { logHandoff, truncatePrompt, logHandoffEvent } from "../src/utils/logger.js";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "node:os";
+import { createHash, randomUUID } from "node:crypto";
+
+/** SHA-256 hex of a UTF-8 string — mirrors verify-provenance.ts */
+function sha256Hex(s: string): string {
+  return createHash("sha256").update(s, "utf-8").digest("hex");
+}
 
 /** Parse all JSONL lines and find a record matching the given jobId */
 function findLogEntry(logPath: string, jobId: string): Record<string, unknown> | undefined {
@@ -156,5 +163,147 @@ describe("logHandoffEvent", () => {
         delete process.env.HANDOFF_LOG_PROMPTS;
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provenance chain tests
+// These use an isolated temp directory via HANDOFF_LOG_DIR to avoid
+// interference with the real daily log file.
+// ---------------------------------------------------------------------------
+
+describe("logHandoffEvent — Merkle chain (provenance)", () => {
+  let tempDir: string;
+  let prevHandoffLogDir: string | undefined;
+
+  // Each test gets its own isolated directory so the per-path hash cache
+  // and mutex start fresh (different logPath per test).
+  function setupIsolatedDir(): string {
+    // Use a unique sub-path so every test gets an untouched logPath.
+    const dir = join(tmpdir(), `handoff-test-${randomUUID()}`);
+    prevHandoffLogDir = process.env.HANDOFF_LOG_DIR;
+    process.env.HANDOFF_LOG_DIR = dir;
+    tempDir = dir;
+    return dir;
+  }
+
+  afterEach(() => {
+    // Restore env var
+    if (prevHandoffLogDir !== undefined) {
+      process.env.HANDOFF_LOG_DIR = prevHandoffLogDir;
+    } else {
+      delete process.env.HANDOFF_LOG_DIR;
+    }
+    // Clean up temp dir
+    if (tempDir && existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("single event has entryId (UUID) and no prevEntryHash", async () => {
+    setupIsolatedDir();
+
+    const jobId = `hnd_chain_single_${Date.now()}`;
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_created",
+      jobId,
+      transport: "cli",
+      agent: "claude",
+    });
+
+    const date = new Date().toISOString().split("T")[0];
+    const logPath = join(tempDir, `${date}.jsonl`);
+    expect(existsSync(logPath)).toBe(true);
+
+    const content = readFileSync(logPath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(1);
+
+    const entry = JSON.parse(lines[0]) as Record<string, unknown>;
+    // entryId should be a UUID (8-4-4-4-12 hex format)
+    expect(typeof entry.entryId).toBe("string");
+    expect((entry.entryId as string)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
+    // First entry must not have prevEntryHash
+    expect(entry.prevEntryHash).toBeUndefined();
+  });
+
+  test("two sequential events form a valid Merkle chain", async () => {
+    setupIsolatedDir();
+
+    const jobId1 = `hnd_chain_first_${Date.now()}`;
+    const jobId2 = `hnd_chain_second_${Date.now()}`;
+
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_created",
+      jobId: jobId1,
+      transport: "cli",
+      agent: "claude",
+    });
+
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_started",
+      jobId: jobId2,
+      transport: "cli",
+      agent: "claude",
+    });
+
+    const date = new Date().toISOString().split("T")[0];
+    const logPath = join(tempDir, `${date}.jsonl`);
+    const content = readFileSync(logPath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(2);
+
+    const first = JSON.parse(lines[0]) as Record<string, unknown>;
+    const second = JSON.parse(lines[1]) as Record<string, unknown>;
+
+    // First entry: no prevEntryHash
+    expect(first.prevEntryHash).toBeUndefined();
+
+    // Second entry: prevEntryHash must equal sha256 of first line (no trailing \n)
+    const expectedHash = sha256Hex(lines[0]);
+    expect(second.prevEntryHash).toBe(expectedHash);
+  });
+
+  test("concurrent events all form a valid chain (mutex prevents shared prevEntryHash)", async () => {
+    setupIsolatedDir();
+
+    const count = 8;
+    const events = Array.from({ length: count }, (_, i) => ({
+      timestamp: new Date().toISOString(),
+      event: "task_created" as const,
+      jobId: `hnd_concurrent_${i}_${Date.now()}`,
+      transport: "cli" as const,
+      agent: "claude",
+    }));
+
+    // Fire all writes concurrently — the mutex must serialize them correctly.
+    await Promise.all(events.map((e) => logHandoffEvent(e)));
+
+    const date = new Date().toISOString().split("T")[0];
+    const logPath = join(tempDir, `${date}.jsonl`);
+    const content = readFileSync(logPath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(count);
+
+    // Verify the full chain: each entry's prevEntryHash equals sha256 of the preceding line.
+    for (let i = 1; i < lines.length; i++) {
+      const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+      const expectedHash = sha256Hex(lines[i - 1]);
+      expect(entry.prevEntryHash).toBe(expectedHash);
+    }
+
+    // Additionally: no two consecutive entries may share the same prevEntryHash
+    // (that would indicate the mutex failed and two writes read the same predecessor).
+    const prevHashes = lines.slice(1).map((l) => {
+      const e = JSON.parse(l) as Record<string, unknown>;
+      return e.prevEntryHash as string;
+    });
+    const uniquePrevHashes = new Set(prevHashes);
+    expect(uniquePrevHashes.size).toBe(prevHashes.length);
   });
 });

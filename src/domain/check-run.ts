@@ -85,21 +85,23 @@ export function getCheckRun(db: Database, id: string): CheckRun | null {
 export function updateCheckRun(
   db: Database,
   id: string,
-  updates: { status: CheckRunStatus; output?: string; exitCode?: number; completedAt?: string }
+  updates: { status: CheckRunStatus; output?: string; exitCode?: number; completedAt?: string; worktreePath?: string }
 ): CheckRun {
-  // Compute content-addressing fields when the run has terminal status and output.
+  // Compute content-addressing fields for all terminal status updates.
   const isTerminal = updates.status === "passed" || updates.status === "failed";
   let outputSha256: string | null = null;
   let subjectCommit: string | null = null;
 
-  if (isTerminal && updates.output != null) {
-    try {
-      outputSha256 = sha256(updates.output);
-    } catch (err) {
-      process.stderr.write(`[check-run] Failed to compute output_sha256: ${err}\n`);
+  if (isTerminal) {
+    if (updates.output != null) {
+      try {
+        outputSha256 = sha256(updates.output);
+      } catch (err) {
+        process.stderr.write(`[check-run] Failed to compute output_sha256: ${err}\n`);
+      }
     }
     try {
-      subjectCommit = getGitHead();
+      subjectCommit = getGitHead(updates.worktreePath);
     } catch (err) {
       process.stderr.write(`[check-run] Failed to get git HEAD: ${err}\n`);
     }
