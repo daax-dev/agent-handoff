@@ -116,7 +116,7 @@ async function readLastLine(filePath: string): Promise<string | null> {
         readSync(fd, buf, 0, chunkSize, offset);
         tail = buf.toString("utf-8") + tail;
         // Strip any trailing newline, then look for the last complete line
-        const stripped = tail.replace(/\n$/, "");
+        const stripped = tail.replace(/\n+$/, "");
         const nlIdx = stripped.lastIndexOf("\n");
         if (nlIdx !== -1 || offset === 0) {
           // Found a newline boundary — last line is everything after it
@@ -195,6 +195,7 @@ async function appendChained(logPath: string, entry: HandoffEvent): Promise<void
     }
 
     const prevHash = lastHashCache.get(logPath);
+    delete entry.prevEntryHash; // clear any caller-supplied value before we set the computed one
     if (prevHash !== null && prevHash !== undefined) {
       entry.prevEntryHash = prevHash;
     }

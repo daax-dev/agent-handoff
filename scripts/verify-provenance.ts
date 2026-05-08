@@ -75,7 +75,9 @@ interface CheckRunResult {
 function verifyCheckRuns(db: Database, taskId?: string): CheckRunResult[] {
   // Check if output_sha256 column exists (migration 015)
   const cols = db.query("PRAGMA table_info(check_runs)").all() as { name: string }[];
-  const hasHashCols = cols.some((c) => c.name === "output_sha256");
+  const hasOutputSha256 = cols.some((c) => c.name === "output_sha256");
+  const hasSubjectCommit = cols.some((c) => c.name === "subject_commit");
+  const hasHashCols = hasOutputSha256 && hasSubjectCommit;
 
   if (!hasHashCols) {
     return [{
@@ -223,7 +225,10 @@ function verifyHandoffFile(filePath: string): ChainResult[] {
     }];
   }
 
-  const lines = content.split("\n").filter((l) => l.trim().length > 0);
+  const lines = content
+    .split("\n")
+    .map((l) => l.replace(/\r$/, ""))
+    .filter((l) => l.trim().length > 0);
 
   if (lines.length === 0) {
     return [{
@@ -265,13 +270,12 @@ function verifyHandoffFile(filePath: string): ChainResult[] {
     if (i === 0) {
       // First entry: no prevEntryHash expected
       if (entry.prevEntryHash != null) {
-        // Has a prev hash but nothing before it — unusual but not a failure
-        // (could happen if file was rotated mid-day or entries were manually removed)
+        // First entry has prevEntryHash — indicates possible truncation/tampering
         results.push({
           lineNumber: lineNum,
           entryId,
-          ok: true,
-          message: `chain start (has prevEntryHash — file may have been truncated)`,
+          ok: false,
+          message: `line ${lineNum}: chain start has prevEntryHash — possible truncation or log rotation artifact (re-run on the preceding file to verify continuity)`,
         });
       } else {
         results.push({

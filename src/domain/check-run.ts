@@ -111,7 +111,7 @@ export function updateCheckRun(
   //   - Terminal with output:    write output + output_sha256 + subject_commit
   //   - Terminal without output: write subject_commit only (don't touch output/sha256)
   //   - Non-terminal:            only update status/exit_code/completed_at
-  if (updates.output !== undefined) {
+  if (isTerminal && updates.output !== undefined) {
     // Terminal update WITH output — store output, hash, and commit.
     try {
       db.run(
