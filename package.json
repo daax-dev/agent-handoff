@@ -37,7 +37,7 @@
     "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:bun": "bun test",
+    "test:bun": "bun run test",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

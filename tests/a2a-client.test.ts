@@ -3,8 +3,7 @@ import { registerAgent, getRegisteredAgents, getRegisteredAgent, clearCardCache,
 import type { AgentCard } from "../src/a2a/types.js";
 import { sendMessage } from "../src/a2a/client.js";
 
-// Track registered agents across tests - we can't clear registeredAgents directly
-// so tests must account for cumulative state or use unique URLs
+// Reset card cache and registered agents before each test to keep test state isolated.
 describe("A2A Agent Card", () => {
   beforeEach(() => {
     clearCardCache();

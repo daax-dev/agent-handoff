@@ -6,7 +6,7 @@ An MCP server that lets any AI coding agent delegate tasks to other AI agents. S
 
 agent-handoff solves a simple problem: your AI coding agent needs to hand off work to another agent. Maybe it needs a specialist, maybe it wants to parallelize, or maybe it wants to fire-and-forget a background task.
 
-**11 MCP tools** cover the full lifecycle: dispatch work, track progress, collect results, and manage workers.
+**11 core MCP tools** cover the main handoff/pool lifecycle: dispatch work, track progress, collect results, and manage workers. Additional ChangeSet and session tools are also available.
 
 **3 usage modes** give flexibility in how agents execute:
 
