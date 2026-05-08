@@ -30,6 +30,14 @@ function isUiOrigin(origin: string | null): boolean {
   return /^http:\/\/(localhost|127\.0\.0\.1):(517[3-9]|518[0-2])$/.test(origin);
 }
 
+// Guard that ensures the TCP connection is from a loopback address.
+// Prevents remote clients from bypassing auth by spoofing the Origin header.
+function isLoopbackRequest(server: ReturnType<typeof Bun.serve>, req: Request): boolean {
+  const ip = server.requestIP(req);
+  if (!ip) return false;
+  return ip.address === "127.0.0.1" || ip.address === "::1";
+}
+
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed = isAllowedOrigin(origin) ? origin! : "http://localhost:5173";
   return {
@@ -84,7 +92,9 @@ export function createApiServer(options: ServerOptions) {
 
       // Bearer token auth — opt-in when API_TOKEN is set
       // Exempt: health (above), OPTIONS (above), Vite UI dev-server origins (5173-5182)
-      if (apiToken && !isUiOrigin(origin)) {
+      // The origin-based exemption also requires a loopback source IP so that
+      // remote clients cannot bypass auth by spoofing the Origin header.
+      if (apiToken && !(isUiOrigin(origin) && isLoopbackRequest(server, req))) {
         const authHeader = req.headers.get("Authorization") ?? "";
         const expected = `Bearer ${apiToken}`;
         if (authHeader !== expected) {
