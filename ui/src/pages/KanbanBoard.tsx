@@ -49,7 +49,7 @@ const COLUMN_BORDER: Record<string, string> = {
 export function KanbanBoard() {
   const qc = useQueryClient();
   const { data: changeSets = [], isLoading, isError } = useChangeSets();
-  const [showEmpty, setShowEmpty] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(true);
 
   useSSE((event: SSEEvent) => {
     if (event.type === "change_set_created" || event.type === "change_set_updated") {
