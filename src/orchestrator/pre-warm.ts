@@ -81,9 +81,11 @@ export function preWarmSessions(db: Database, _changeSetId: string): void {
         //   1. Start up (e.g. `claude --dangerously-skip-permissions`)
         //   2. Register itself via POST /api/agent-sessions with { tool, roles: [] }
         //   3. Send heartbeats every ~30s via POST /api/agent-sessions/:id/heartbeat
-        //   4. Poll for queued work via GET /api/agent-sessions/:id
-        //   5. When queued_change_set_id is set (Mode B dispatch), begin the task
-        //   6. On completion, call markWaiting() and go back to step 3
+        //   4. Poll for work using the existing task-claim flow (see
+        //      src/mcp-tools/claim-task.ts), rather than a per-session
+        //      GET /api/agent-sessions/:id endpoint
+        //   5. When a task is claimed, begin the task
+        //   6. On completion, call markWaiting() and resume the polling/heartbeat loop
         // Until this warm-pool agent process exists, spawnAgent() cannot be reused
         // here because it is one-shot (exits after the task) and task-bound
         // (requires a concrete changeSetId and handoff file up-front).

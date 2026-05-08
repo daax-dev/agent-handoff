@@ -70,21 +70,21 @@ try {
   const row = db.query<{ count: number }, []>("SELECT COUNT(*) as count FROM agent_assignments").get();
   seededMsg = `Agent assignments: ${row?.count ?? 0} defaults`;
 
-  // Enable auto_launch for all GSD FSM states used by the UI/FSM
-  // Only apply if no rows of any tool have auto_launch already set to 1 (idempotent guard)
-  const alreadySeeded = db.query<{ count: number }, []>(
-    "SELECT COUNT(*) as count FROM agent_assignments WHERE auto_launch = 1"
-  ).get();
+  // Enable auto_launch for all GSD FSM states used by the UI/FSM.
+  // Scope the update to the intended claude-code defaults and only change rows
+  // that are still disabled so setup remains idempotent without skipping when
+  // unrelated tools/states already have auto_launch enabled.
+  const result = db.run(
+    "UPDATE agent_assignments SET auto_launch = 1 " +
+    "WHERE tool = 'claude-code' AND auto_launch = 0 AND fsm_state IN " +
+    "('project_init','roadmap_ready','discussing','planning','plan_ready'," +
+    " 'executing','verifying','gap_fixing','shipping','phase_done','milestone_complete','escalated')"
+  );
 
-  if (!alreadySeeded || alreadySeeded.count === 0) {
-    const result = db.run(
-      "UPDATE agent_assignments SET auto_launch = 1 WHERE tool = 'claude-code' AND fsm_state IN " +
-      "('project_init','roadmap_ready','discussing','planning','plan_ready'," +
-      " 'executing','verifying','gap_fixing','shipping','phase_done','milestone_complete','escalated')"
-    );
+  if (result.changes > 0) {
     seededMsg += `, auto_launch=1 on ${result.changes} GSD assignment(s)`;
   } else {
-    seededMsg += `, auto_launch seeding skipped (already configured)`;
+    seededMsg += `, claude-code GSD auto_launch already configured`;
   }
 } catch {
   // PRD-020 not yet applied — skip silently
