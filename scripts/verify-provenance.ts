@@ -43,6 +43,7 @@ function openDb(): Database {
   }
 
   const db = new Database(dbPath);
+  db.exec("PRAGMA query_only = ON;");
   db.exec("PRAGMA foreign_keys = ON;");
   // Do NOT call runMigrations — a verification tool must not mutate the evidence
   // it is verifying. Column-existence is handled gracefully in verifyCheckRuns().

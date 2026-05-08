@@ -271,7 +271,7 @@ Output example:
 RESULT: PASS
 ```
 
-If any line in a handoff log file is edited (even a single character), `verify-provenance` will detect the chain break and exit 1.
+If any entry in a handoff log file is edited (except possibly the current tail, which has no successor yet), `verify-provenance` will detect the chain break and exit 1. Tail-entry edits become detectable when the next entry is written.
 
 **Note:** Verification is most reliable on rotated daily log files (previous days). Today's active file is still being written to, so the tail may be incomplete while a write is in progress. Writes are serialized per log path via an in-process mutex, so both sequential and concurrent production writes produce a valid chain. If you run `verify-provenance` on today's file mid-write you may see one incomplete tail entry, which is normal — re-run after the write completes and the chain will be intact.
 

@@ -120,7 +120,7 @@ async function readLastLine(filePath: string): Promise<string | null> {
         const nlIdx = stripped.lastIndexOf("\n");
         if (nlIdx !== -1 || offset === 0) {
           // Found a newline boundary — last line is everything after it
-          const lastLine = stripped.slice(nlIdx + 1).trim();
+          const lastLine = stripped.slice(nlIdx + 1).replace(/\r$/, "");
           return lastLine.length > 0 ? lastLine : null;
         }
         // No newline yet — keep reading backwards
@@ -142,6 +142,20 @@ function sha256Hex(content: string): string {
 }
 
 /**
+ * Evict cache entries for log paths that do not belong to today's date.
+ * Prevents indefinite accumulation when a long-running process spans multiple days.
+ */
+function evictStaleCacheEntries(): void {
+  const today = new Date().toISOString().split("T")[0]; // e.g. "2026-05-08"
+  for (const key of lastHashCache.keys()) {
+    if (!key.includes(today)) {
+      lastHashCache.delete(key);
+      writeLockChain.delete(key);
+    }
+  }
+}
+
+/**
  * Append entry to a JSONL log file in a serialized, Merkle-chained manner.
  *
  * Uses a per-path promise-chain mutex so that concurrent calls for the same
@@ -155,6 +169,9 @@ function sha256Hex(content: string): string {
  * matching what verify-provenance.ts computes with `sha256Hex(lines[i-1])`.
  */
 async function appendChained(logPath: string, entry: HandoffEvent): Promise<void> {
+  // Evict stale cache entries from previous days to keep memory bounded.
+  evictStaleCacheEntries();
+
   // Chain onto the previous write promise for this path (or resolve immediately
   // if this is the first write for this path).
   const prevLock = writeLockChain.get(logPath) ?? Promise.resolve();

@@ -107,11 +107,12 @@ export function updateCheckRun(
     }
   }
 
-  // Only overwrite output/output_sha256/subject_commit when output is explicitly provided.
-  // A status-only update (e.g. running → failed without new output) must not clobber
-  // evidence that was stored by a prior terminal update.
+  // Update strategy:
+  //   - Terminal with output:    write output + output_sha256 + subject_commit
+  //   - Terminal without output: write subject_commit only (don't touch output/sha256)
+  //   - Non-terminal:            only update status/exit_code/completed_at
   if (updates.output !== undefined) {
-    // Use a column-existence guard: if output_sha256 column exists (migration 015 applied), store it.
+    // Terminal update WITH output — store output, hash, and commit.
     try {
       db.run(
         `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ?, output_sha256 = ?, subject_commit = ? WHERE id = ?`,
@@ -144,9 +145,38 @@ export function updateCheckRun(
         throw err;
       }
     }
+  } else if (isTerminal) {
+    // Terminal update WITHOUT output — record commit but leave output/sha256 untouched.
+    try {
+      db.run(
+        `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ?, subject_commit = ? WHERE id = ?`,
+        [
+          updates.status,
+          updates.exitCode ?? null,
+          updates.completedAt ?? null,
+          subjectCommit,
+          id,
+        ]
+      );
+    } catch (err) {
+      const errMsg = String(err);
+      if (errMsg.includes("subject_commit")) {
+        process.stderr.write(`[check-run] subject_commit column not available (migration 015 not applied?): ${err}\n`);
+        db.run(
+          `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+          [
+            updates.status,
+            updates.exitCode ?? null,
+            updates.completedAt ?? null,
+            id,
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
   } else {
-    // No output provided — update only status/exit_code/completed_at and leave
-    // output, output_sha256, and subject_commit untouched.
+    // Non-terminal update — only touch status/exit_code/completed_at.
     db.run(
       `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
       [

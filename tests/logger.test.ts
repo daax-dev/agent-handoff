@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from "./test-compat.js";
 import { logHandoff, truncatePrompt, logHandoffEvent } from "../src/utils/logger.js";
-import { existsSync, readFileSync, rmSync } from "fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "node:os";
 import { createHash, randomUUID } from "node:crypto";
@@ -204,7 +204,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     setupIsolatedDir();
 
     const jobId = `hnd_chain_single_${Date.now()}`;
-    const date = new Date().toISOString().split("T")[0]; // capture before write to avoid midnight flake
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "task_created",
@@ -213,11 +212,14 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const logPath = join(tempDir, `${date}.jsonl`);
-    expect(existsSync(logPath)).toBe(true);
+    // Discover actual JSONL files written (handles midnight boundary)
+    const jsonlFiles = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl"));
+    expect(jsonlFiles.length).toBeGreaterThan(0);
 
-    const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    const allContent = jsonlFiles
+      .map((f) => readFileSync(join(tempDir, f), "utf-8"))
+      .join("");
+    const lines = allContent.split("\n").filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(1);
 
     const entry = JSON.parse(lines[0]) as Record<string, unknown>;
@@ -236,7 +238,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     const jobId1 = `hnd_chain_first_${Date.now()}`;
     const jobId2 = `hnd_chain_second_${Date.now()}`;
 
-    const date = new Date().toISOString().split("T")[0]; // capture before writes to avoid midnight flake
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "task_created",
@@ -253,9 +254,12 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const logPath = join(tempDir, `${date}.jsonl`);
-    const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    // Discover actual JSONL files written (handles midnight boundary)
+    const jsonlFiles = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl"));
+    const allContent = jsonlFiles
+      .map((f) => readFileSync(join(tempDir, f), "utf-8"))
+      .join("");
+    const lines = allContent.split("\n").filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(2);
 
     const first = JSON.parse(lines[0]) as Record<string, unknown>;
@@ -273,7 +277,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     setupIsolatedDir();
 
     const count = 8;
-    const date = new Date().toISOString().split("T")[0]; // capture before writes to avoid midnight flake
     const events = Array.from({ length: count }, (_, i) => ({
       timestamp: new Date().toISOString(),
       event: "task_created" as const,
@@ -285,9 +288,12 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
     // Fire all writes concurrently — the mutex must serialize them correctly.
     await Promise.all(events.map((e) => logHandoffEvent(e)));
 
-    const logPath = join(tempDir, `${date}.jsonl`);
-    const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    // Discover actual JSONL files written (handles midnight boundary)
+    const jsonlFiles = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl"));
+    const allContent = jsonlFiles
+      .map((f) => readFileSync(join(tempDir, f), "utf-8"))
+      .join("");
+    const lines = allContent.split("\n").filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(count);
 
     // Verify the full chain: each entry's prevEntryHash equals sha256 of the preceding line.
