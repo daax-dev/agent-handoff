@@ -18,8 +18,8 @@ import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  // Allow any localhost port in API range (4000-4999) or UI range (5173-5182) for CORS
-  return /^http:\/\/(localhost|127\.0\.0\.1):(4\d{3}|517[3-9]|518[0-2])$/.test(origin);
+  // Allow API server ports (4000-4009) or Vite UI dev-server ports (5173-5182)
+  return /^http:\/\/(localhost|127\.0\.0\.1):(400[0-9]|517[3-9]|518[0-2])$/.test(origin);
 }
 
 // Narrower predicate used only for bearer-auth exemption.

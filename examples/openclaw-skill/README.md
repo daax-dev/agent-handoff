@@ -5,7 +5,7 @@ This directory contains an OpenClaw skill plugin that integrates agent-handoff w
 ## What this skill does
 
 Allows OpenClaw to create and manage agent-handoff development workflows over HTTP. OpenClaw can:
-- Create ChangeSets (one per task, each auto-generates its own git worktree)
+- Create ChangeSets (one per task, each auto-generates a worktree path — the git worktree is created on disk by the internal SDLC flow)
 - Advance the FSM state machine (plan_accepted, submit_for_review, approve, merge)
 - Handle HITL (human-in-the-loop) approval gates
 - Poll ChangeSet status until a desired state is reached

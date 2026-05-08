@@ -60,7 +60,7 @@ curl -s http://localhost:4000/api/health
 
 ### ChangeSets
 
-A **ChangeSet** is the unit of work — one task, one git worktree, one FSM lifecycle.
+A **ChangeSet** is the unit of work — one git worktree, one FSM lifecycle. A ChangeSet can have multiple associated Task records.
 
 #### `POST /api/change-sets/quick-create`
 
@@ -201,6 +201,8 @@ When a FSM transition hits a HITL gate, the `PATCH /api/change-sets/:id/status` 
 
 Approve a pending HITL gate.
 
+> **Note:** Always send a JSON body (at minimum `{}`). The server parses the request body unconditionally; an empty or absent body will return a parse error.
+
 ```bash
 # First, trigger the approve transition to get approvalId
 APPROVAL_ID=$(curl -s -X PATCH http://localhost:4000/api/change-sets/chg_000001/status \
@@ -208,12 +210,18 @@ APPROVAL_ID=$(curl -s -X PATCH http://localhost:4000/api/change-sets/chg_000001/
   -H "Authorization: Bearer $API_TOKEN" \
   -d '{"trigger":"approve"}' | jq -r '.approvalId')
 
-# Then approve it
+# With decided_by
 curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/approve" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_TOKEN" \
   -d '{"decided_by":"openclaw-skill"}'
 # Response: {"approvalId":"<uuid>","decision":"approved","newStatus":"approved"}
+
+# Without decided_by (send empty object)
+curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/approve" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -d '{}'
 ```
 
 #### `POST /api/approvals/:approvalId/reject`

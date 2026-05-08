@@ -75,7 +75,7 @@
       "name": "approve_hitl_gate",
       "method": "POST",
       "path": "/api/approvals/{approvalId}/approve",
-      "description": "Approve a pending HITL (human-in-the-loop) gate. Use the approvalId returned by a 202 response from advance_fsm.",
+      "description": "Approve a pending HITL gate. Use the approvalId returned by a 202 response from advance_fsm. Always send a JSON body (at minimum {}) — the server requires a parseable request body even when decided_by is omitted.",
       "parameters": [
         {
           "name": "approvalId",

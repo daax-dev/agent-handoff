@@ -17,7 +17,10 @@ let sse: SSEBroadcaster;
 let server: ReturnType<typeof Bun.serve>;
 let BASE: string;
 
+let topLevelApiToken: string | undefined;
 beforeAll(() => {
+  topLevelApiToken = process.env.API_TOKEN;
+  delete process.env.API_TOKEN; // ensure server starts without auth
   db = openTestDb(MIGRATIONS_DIR);
   sse = new SSEBroadcaster();
   const result = createApiServer({ db, sse, port: 0 }); // port 0 = random
@@ -26,6 +29,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  if (topLevelApiToken === undefined) {
+    delete process.env.API_TOKEN;
+  } else {
+    process.env.API_TOKEN = topLevelApiToken;
+  }
   sse.close();
   server.stop(true);
   db.close();
