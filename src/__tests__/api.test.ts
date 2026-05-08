@@ -880,11 +880,32 @@ describe("Bearer token auth", () => {
     expect(res.status).toBe(200);
   });
 
-  test("UI origin (localhost:5173) is exempt without token", async () => {
+  test("UI origin (localhost:5173) is NOT exempt by default — requires token", async () => {
     const res = await fetch(`${authBase}/api/change-sets`, {
       headers: { Origin: "http://localhost:5173" },
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+  });
+
+  test("UI origin (localhost:5173) is exempt when API_TOKEN_ALLOW_UI_ORIGIN_BYPASS=1", async () => {
+    const previousBypass = process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS;
+    process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS = "1";
+    const result = createApiServer({ db, sse, port: 0 });
+    const bypassServer = result.server;
+    const bypassBase = `http://localhost:${bypassServer.port}`;
+    try {
+      const res = await fetch(`${bypassBase}/api/change-sets`, {
+        headers: { Origin: "http://localhost:5173" },
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      bypassServer.stop(true);
+      if (previousBypass === undefined) {
+        delete process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS;
+      } else {
+        process.env.API_TOKEN_ALLOW_UI_ORIGIN_BYPASS = previousBypass;
+      }
+    }
   });
 
   test("API port origin (localhost:4000) is NOT exempt — requires token", async () => {
