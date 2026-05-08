@@ -130,7 +130,7 @@ export function serializeContext(ctx: HandoffContext): string {
  * @throws ZodError on schema violations, or Error on decompression failure.
  */
 export function deserializeContext(encoded: string): HandoffContext {
-  // Bound input string length before allocating a Buffer (Comment 5)
+  // Bound input string length before allocating a Buffer
   if (encoded.length > MAX_ENCODED_CHARS) {
     throw new Error(
       `Encoded payload length ${encoded.length} chars exceeds limit of ${MAX_ENCODED_CHARS} chars`,
@@ -142,7 +142,7 @@ export function deserializeContext(encoded: string): HandoffContext {
       `Compressed payload ${compressed.byteLength} bytes exceeds limit of ${MAX_COMPRESSED_BYTES} bytes`,
     );
   }
-  // Guard against decompression bombs: check uncompressed size before JSON.parse (Comment 6)
+  // Guard against decompression bombs: check uncompressed size before JSON.parse
   const decompressed = inflateSync(compressed);
   if (decompressed.byteLength > MAX_UNCOMPRESSED_BYTES) {
     throw new Error(

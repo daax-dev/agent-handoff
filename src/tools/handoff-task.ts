@@ -101,60 +101,71 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
       transport,
     });
 
-    // Local DoD validation: only meaningful when RECEIVER_CAPABILITIES is explicitly
-    // set in the environment. An empty set rejects any required criterion, which does
-    // NOT reflect a real remote receiver's capabilities. For remote A2A receivers the
-    // proposal should be transmitted over the wire rather than evaluated locally.
-    const receiverCapabilities = (process.env.RECEIVER_CAPABILITIES ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const receiverCapabilitiesEnv = process.env.RECEIVER_CAPABILITIES;
 
-    const response = await executeHandshake(proposal, receiverCapabilities);
-
-    if (!response.accepted) {
-      updateJob(job.id, {
-        status: "failed",
-        handshakeStatus: "rejected",
-        handshakeRejectionReason: response.reason,
-        completedAt: new Date().toISOString(),
-        error: `Handshake rejected: ${response.reason}${response.detail ? ` — ${response.detail}` : ""}`,
-      });
+    if (!receiverCapabilitiesEnv) {
+      // RECEIVER_CAPABILITIES not configured: this is an outbound proposal to a remote
+      // receiver that will evaluate the DoD criteria itself. Accept locally and proceed.
+      updateJob(job.id, { handshakeStatus: "accepted" });
 
       logHandoffEvent({
         timestamp: new Date().toISOString(),
-        event: "handshake_rejected",
+        event: "handshake_accepted",
         jobId: job.id,
         transport,
-        error: response.reason,
       });
+    } else {
+      const receiverCapabilities = receiverCapabilitiesEnv
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              jobId: job.id,
-              status: "failed",
-              handshakeStatus: "rejected",
-              reason: response.reason,
-              detail: response.detail,
-            },
-            null,
-            2,
-          ),
-        }],
-      };
+      const response = await executeHandshake(proposal, receiverCapabilities);
+
+      if (!response.accepted) {
+        updateJob(job.id, {
+          status: "failed",
+          handshakeStatus: "rejected",
+          handshakeRejectionReason: response.reason,
+          completedAt: new Date().toISOString(),
+          error: `Handshake rejected: ${response.reason}${response.detail ? ` — ${response.detail}` : ""}`,
+        });
+
+        logHandoffEvent({
+          timestamp: new Date().toISOString(),
+          event: "handshake_rejected",
+          jobId: job.id,
+          transport,
+          error: response.reason,
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                jobId: job.id,
+                status: "failed",
+                handshakeStatus: "rejected",
+                reason: response.reason,
+                detail: response.detail,
+              },
+              null,
+              2,
+            ),
+          }],
+        };
+      }
+
+      updateJob(job.id, { handshakeStatus: "accepted" });
+
+      logHandoffEvent({
+        timestamp: new Date().toISOString(),
+        event: "handshake_accepted",
+        jobId: job.id,
+        transport,
+      });
     }
-
-    updateJob(job.id, { handshakeStatus: "accepted" });
-
-    logHandoffEvent({
-      timestamp: new Date().toISOString(),
-      event: "handshake_accepted",
-      jobId: job.id,
-      transport,
-    });
   }
 
   // Pool mode: enqueue for worker pickup instead of spawning

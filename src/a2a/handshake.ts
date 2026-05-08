@@ -16,7 +16,7 @@ import { z } from "zod";
 import { logHandoffEvent } from "../utils/logger.js";
 
 // Dedicated sentinel so a handler that throws the same message string is not
-// misclassified as a timeout (Comment 2).
+// misclassified as a timeout.
 class HandoffAckTimeoutError extends Error {
   constructor() {
     super("HANDOFF_ACK_TIMEOUT");
