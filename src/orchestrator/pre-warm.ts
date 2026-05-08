@@ -21,7 +21,8 @@
  * on-demand Mode A spawning automatically.
  *
  * Issue note: the spec mentions matching on tool+model, but agent_sessions has
- * no model column — matching is done on tool only (per findWaitingSession).
+ * no model column — matching is done on tool + role (sessions with an empty
+ * roles list match any role, per findWaitingSession).
  */
 
 import type { Database } from "bun:sqlite";
@@ -46,7 +47,11 @@ export function preWarmSessions(db: Database, _changeSetId: string): void {
       )
       .all();
 
+    const seen = new Set<string>();
     for (const { tool, role, fsm_state } of assignments) {
+      const key = `${tool}/${role}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       try {
         const existing = findWaitingSession(db, tool, role);
         if (existing) {

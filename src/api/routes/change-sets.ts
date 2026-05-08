@@ -50,7 +50,7 @@ export function changeSetRoutes(
       const cs = createChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      preWarmSessions(db, cs.id);
+      queueMicrotask(() => { preWarmSessions(db, cs.id); });
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -65,7 +65,7 @@ export function changeSetRoutes(
       const cs = quickCreateChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      preWarmSessions(db, cs.id);
+      queueMicrotask(() => { preWarmSessions(db, cs.id); });
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -86,7 +86,7 @@ export function changeSetRoutes(
       }
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      preWarmSessions(db, cs.id);
+      queueMicrotask(() => { preWarmSessions(db, cs.id); });
       return json(cs, 201);
     }) as unknown as Response;
   }

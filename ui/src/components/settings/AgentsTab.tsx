@@ -319,7 +319,7 @@ function AddAssignmentModal({ existingAssignments, onDone, onClose }: AddModalPr
 }
 
 // ── PoolIndicatorStrip ────────────────────────────────────────────────────────
-// Shows warm (waiting) and busy session counts per tool.
+// Shows warm (waiting) and busy (running) session counts per tool.
 // Data comes from the existing /api/agent-sessions endpoint polled every 3s.
 
 interface PoolCounts {
@@ -436,7 +436,7 @@ export function AgentsTab() {
           </div>
         </div>
 
-        {/* Pool warm/cold indicator strip — shows live session counts per tool */}
+        {/* Pool indicator strip — shows warm (waiting) and busy (running) session counts per tool */}
         <PoolIndicatorStrip tools={[...new Set<AgentTool>(all.map((a) => a.tool))]} />
 
         {/* Table */}

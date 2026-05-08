@@ -71,12 +71,21 @@ try {
   seededMsg = `Agent assignments: ${row?.count ?? 0} defaults`;
 
   // GSD states seeded by migration 013 — enable auto_launch for claude-code assignments
-  const autoLaunchResult = db.run(
-    "UPDATE agent_assignments SET auto_launch = 1 WHERE tool = 'claude-code' AND fsm_state IN " +
-    "('project_init','roadmap_ready','discussing','planning','plan_ready'," +
-    " 'executing','verifying','gap_fixing','shipping','phase_done','milestone_complete','escalated')"
-  );
-  seededMsg += `, auto_launch=1 on ${autoLaunchResult.changes} GSD assignment(s)`;
+  // Only apply if no claude-code rows have auto_launch already set to 1 (idempotent guard)
+  const alreadySeeded = db.query<{ count: number }, []>(
+    "SELECT COUNT(*) as count FROM agent_assignments WHERE tool = 'claude-code' AND auto_launch = 1"
+  ).get();
+
+  if (!alreadySeeded || alreadySeeded.count === 0) {
+    const result = db.run(
+      "UPDATE agent_assignments SET auto_launch = 1 WHERE tool = 'claude-code' AND fsm_state IN " +
+      "('project_init','roadmap_ready','discussing','planning','plan_ready'," +
+      " 'executing','verifying','gap_fixing','shipping','phase_done','milestone_complete','escalated')"
+    );
+    seededMsg += `, auto_launch=1 on ${result.changes} GSD assignment(s)`;
+  } else {
+    seededMsg += `, auto_launch seeding skipped (already configured)`;
+  }
 } catch {
   // PRD-020 not yet applied — skip silently
 }
