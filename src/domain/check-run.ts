@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 
 export const CheckRunNameSchema = z.enum(["typecheck", "lint", "test", "security", "custom"]);
 export const CheckRunStatusSchema = z.enum(["pending", "running", "passed", "failed", "skipped"]);
@@ -13,11 +14,42 @@ export const CheckRunSchema = z.object({
   exit_code: z.number().int().nullable(),
   started_at: z.string(),
   completed_at: z.string().nullable(),
+  output_sha256: z.string().nullable().optional(),
+  subject_commit: z.string().nullable().optional(),
 });
 
 export type CheckRun = z.infer<typeof CheckRunSchema>;
 export type CheckRunName = z.infer<typeof CheckRunNameSchema>;
 export type CheckRunStatus = z.infer<typeof CheckRunStatusSchema>;
+
+/**
+ * Compute SHA-256 of the given string.
+ * Returns hex digest.
+ */
+function sha256(content: string): string {
+  return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+/**
+ * Read the current HEAD commit SHA from git.
+ * Returns null if git is unavailable or not in a git repo.
+ */
+function getGitHead(cwd?: string): string | null {
+  try {
+    const result = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+      cwd: cwd ?? process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return null;
+    const out = result.stdout instanceof Buffer
+      ? result.stdout.toString("utf-8")
+      : new TextDecoder().decode(result.stdout as Uint8Array);
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 function nextId(db: Database): string {
   const row = db
@@ -53,18 +85,109 @@ export function getCheckRun(db: Database, id: string): CheckRun | null {
 export function updateCheckRun(
   db: Database,
   id: string,
-  updates: { status: CheckRunStatus; output?: string; exitCode?: number; completedAt?: string }
+  updates: { status: CheckRunStatus; output?: string; exitCode?: number; completedAt?: string; worktreePath?: string }
 ): CheckRun {
-  db.run(
-    `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
-    [
-      updates.status,
-      updates.output ?? null,
-      updates.exitCode ?? null,
-      updates.completedAt ?? null,
-      id,
-    ]
-  );
+  // Compute content-addressing fields for all terminal status updates.
+  const isTerminal = updates.status === "passed" || updates.status === "failed";
+  let outputSha256: string | null = null;
+  let subjectCommit: string | null = null;
+
+  if (isTerminal) {
+    if (updates.output != null) {
+      try {
+        outputSha256 = sha256(updates.output);
+      } catch (err) {
+        process.stderr.write(`[check-run] Failed to compute output_sha256: ${err}\n`);
+      }
+    }
+    try {
+      subjectCommit = getGitHead(updates.worktreePath);
+    } catch (err) {
+      process.stderr.write(`[check-run] Failed to get git HEAD: ${err}\n`);
+    }
+  }
+
+  // Update strategy:
+  //   - Terminal with output:    write output + output_sha256 + subject_commit
+  //   - Terminal without output: write subject_commit only (don't touch output/sha256)
+  //   - Non-terminal:            only update status/exit_code/completed_at
+  if (isTerminal && updates.output !== undefined) {
+    // Terminal update WITH output — store output, hash, and commit.
+    try {
+      db.run(
+        `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ?, output_sha256 = ?, subject_commit = ? WHERE id = ?`,
+        [
+          updates.status,
+          updates.output,
+          updates.exitCode ?? null,
+          updates.completedAt ?? null,
+          outputSha256,
+          subjectCommit,
+          id,
+        ]
+      );
+    } catch (err) {
+      // Migration 015 may not be applied in some test environments; fall back gracefully.
+      const errMsg = String(err);
+      if (errMsg.includes("output_sha256") || errMsg.includes("subject_commit")) {
+        process.stderr.write(`[check-run] output_sha256/subject_commit columns not available (migration 015 not applied?): ${err}\n`);
+        db.run(
+          `UPDATE check_runs SET status = ?, output = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+          [
+            updates.status,
+            updates.output,
+            updates.exitCode ?? null,
+            updates.completedAt ?? null,
+            id,
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
+  } else if (isTerminal) {
+    // Terminal update WITHOUT output — record commit but leave output/sha256 untouched.
+    try {
+      db.run(
+        `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ?, subject_commit = ? WHERE id = ?`,
+        [
+          updates.status,
+          updates.exitCode ?? null,
+          updates.completedAt ?? null,
+          subjectCommit,
+          id,
+        ]
+      );
+    } catch (err) {
+      const errMsg = String(err);
+      if (errMsg.includes("subject_commit")) {
+        process.stderr.write(`[check-run] subject_commit column not available (migration 015 not applied?): ${err}\n`);
+        db.run(
+          `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+          [
+            updates.status,
+            updates.exitCode ?? null,
+            updates.completedAt ?? null,
+            id,
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    // Non-terminal update — only touch status/exit_code/completed_at.
+    db.run(
+      `UPDATE check_runs SET status = ?, exit_code = ?, completed_at = ? WHERE id = ?`,
+      [
+        updates.status,
+        updates.exitCode ?? null,
+        updates.completedAt ?? null,
+        id,
+      ]
+    );
+  }
+
   return getCheckRun(db, id)!;
 }
 

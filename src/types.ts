@@ -252,4 +252,8 @@ export interface HandoffEvent {
   // Context
   workingDirectory?: string;
   spawnMode?: "headless" | "tmux";
+
+  // Provenance / Merkle chain (#22)
+  prevEntryHash?: string;  // sha256 of previous log entry in this file
+  entryId?: string;        // unique ID for this entry
 }
