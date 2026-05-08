@@ -337,16 +337,9 @@ function verifyHandoffLogs(taskId?: string): FileChainResult[] {
   for (const file of files) {
     const filePath = join(handoffDir, file);
 
-    if (taskId) {
-      // Filter: only include files that mention the taskId
-      let content: string;
-      try {
-        content = readFileSync(filePath, "utf-8");
-      } catch {
-        continue;
-      }
-      if (!content.includes(taskId)) continue;
-    }
+    // Note: do NOT filter handoff files by taskId — the Merkle chain must be
+    // verified in full. A taskId filter would silently skip chain entries and
+    // miss breaks in the chain. taskId filtering applies only to check runs.
 
     results.push({
       filePath,

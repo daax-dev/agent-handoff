@@ -34,10 +34,10 @@ function sha256(content: string): string {
  * Read the current HEAD commit SHA from git.
  * Returns null if git is unavailable or not in a git repo.
  */
-function getGitHead(cwd: string = process.cwd()): string | null {
+function getGitHead(cwd?: string): string | null {
   try {
     const result = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
-      cwd,
+      cwd: cwd ?? process.cwd(),
       stdout: "pipe",
       stderr: "pipe",
     });
