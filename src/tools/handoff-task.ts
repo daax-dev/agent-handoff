@@ -63,6 +63,7 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
     timeoutMs: args.timeoutMs,
     authHeaders,
     contextPayload: args.contextPayload,
+    senderSpiffeId: args.senderSpiffeId,
   });
 
   logHandoffEvent({
@@ -91,6 +92,8 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
       })),
     });
 
+    updateJob(job.id, { handshakeStatus: "pending" });
+
     logHandoffEvent({
       timestamp: new Date().toISOString(),
       event: "handshake_proposed",
@@ -98,11 +101,10 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
       transport,
     });
 
-    // In the MCP context the receiver is the remote agent; here we exercise the
-    // local path so the sender can validate the proposal before queuing/spawning.
-    // For remote A2A receivers, the proposal would be transmitted over the wire.
-    // We assume local receiver capabilities from the environment or empty set when
-    // not configured — callers can extend this by setting RECEIVER_CAPABILITIES.
+    // Local DoD validation: only meaningful when RECEIVER_CAPABILITIES is explicitly
+    // set in the environment. An empty set rejects any required criterion, which does
+    // NOT reflect a real remote receiver's capabilities. For remote A2A receivers the
+    // proposal should be transmitted over the wire rather than evaluated locally.
     const receiverCapabilities = (process.env.RECEIVER_CAPABILITIES ?? "")
       .split(",")
       .map((s) => s.trim())

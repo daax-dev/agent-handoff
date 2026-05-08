@@ -39,6 +39,8 @@ export interface Job {
   // Handshake (#19)
   handshakeStatus?: "pending" | "accepted" | "rejected";
   handshakeRejectionReason?: string;
+  /** SPIFFE ID of the sending agent; stored for future SVID-based verification */
+  senderSpiffeId?: string;
 }
 
 export interface A2AArtifactResult {
@@ -59,7 +61,7 @@ export interface HandoffTaskInput {
   requiredCapabilities?: string[];
   /** Serialized HandoffContext (base64) for multi-session task continuation (#18) */
   contextPayload?: string;
-  /** SPIFFE ID of the sender; triggers SVID verification when present (#17) */
+  /** SPIFFE ID of the sender; stored on the job for future SVID-based verification (not yet enforced) */
   senderSpiffeId?: string;
   /** DoD criteria for two-phase handshake (#19) */
   dodCriteria?: Array<{ id: string; description: string; required?: boolean }>;
@@ -205,7 +207,8 @@ export type HandoffEventType =
   // Handshake events (#19)
   | "handshake_proposed"
   | "handshake_accepted"
-  | "handshake_rejected";
+  | "handshake_rejected"
+  | "handshake_ack_timeout";
 
 export interface HandoffEvent {
   timestamp: string;

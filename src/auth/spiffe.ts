@@ -49,7 +49,7 @@ export const HandoffEnvelopeSchema = z.object({
    * HMAC-SHA256 signature (hex) over
    *   `${senderSpiffeId}:${issuedAt}:${svidExpiry}:${payload}`
    */
-  signature: z.string().min(1),
+  signature: z.string().regex(/^[0-9a-f]{64}$/, "signature must be a 64-char lowercase hex HMAC-SHA256 digest"),
   /** Schema version for forward compatibility */
   version: z.literal("1"),
 });

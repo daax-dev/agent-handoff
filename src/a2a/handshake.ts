@@ -15,6 +15,15 @@
 import { z } from "zod";
 import { logHandoffEvent } from "../utils/logger.js";
 
+// Dedicated sentinel so a handler that throws the same message string is not
+// misclassified as a timeout (Comment 2).
+class HandoffAckTimeoutError extends Error {
+  constructor() {
+    super("HANDOFF_ACK_TIMEOUT");
+    this.name = "HandoffAckTimeoutError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -82,7 +91,7 @@ export type HandoffResponse = HandoffAck | HandoffRejection;
 
 const ACK_TIMEOUT_MS = 30_000;
 
-async function escalateTimeout(proposal: HandoffProposal): Promise<void> {
+async function escalateTimeout(proposal: HandoffProposal, timeoutMs: number): Promise<void> {
   const hawkeyeUrl = process.env.HAWKEYE_URL;
 
   const structuredWarning = {
@@ -90,7 +99,7 @@ async function escalateTimeout(proposal: HandoffProposal): Promise<void> {
     event: "handoff_ack_timeout",
     senderJobId: proposal.senderJobId,
     taskTitle: proposal.taskTitle,
-    timeoutMs: ACK_TIMEOUT_MS,
+    timeoutMs,
     timestamp: new Date().toISOString(),
   };
 
@@ -188,7 +197,7 @@ export async function proposeHandoffWithTimeout(
 
   const timeoutPromise = new Promise<HandoffResponse>((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      reject(new Error("HANDOFF_ACK_TIMEOUT"));
+      reject(new HandoffAckTimeoutError());
     }, timeoutMs);
   });
 
@@ -199,17 +208,17 @@ export async function proposeHandoffWithTimeout(
   } catch (err) {
     clearTimeout(timeoutHandle);
 
-    if (err instanceof Error && err.message === "HANDOFF_ACK_TIMEOUT") {
-      await escalateTimeout(proposal);
+    if (err instanceof HandoffAckTimeoutError) {
+      await escalateTimeout(proposal, timeoutMs);
 
       await logHandoffEvent({
         timestamp: new Date().toISOString(),
-        event: "task_timed_out",
+        event: "handshake_ack_timeout",
         jobId: proposal.senderJobId,
         error: `Receiver did not acknowledge within ${timeoutMs}ms`,
       });
 
-      return buildRejection("ACK_TIMEOUT", `Receiver did not respond within ${ACK_TIMEOUT_MS}ms`);
+      return buildRejection("ACK_TIMEOUT", `Receiver did not respond within ${timeoutMs}ms`);
     }
 
     throw err;

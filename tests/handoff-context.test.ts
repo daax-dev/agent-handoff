@@ -1,5 +1,6 @@
 import { describe, test, expect } from "./test-compat.js";
 import { randomBytes } from "crypto";
+import { deflateSync } from "zlib";
 import {
   serializeContext,
   deserializeContext,
@@ -151,6 +152,16 @@ describe("serializeContext / deserializeContext roundtrip", () => {
 
   test("throws on corrupted base64 input", () => {
     expect(() => deserializeContext("not-valid-compressed-data!!!")).toThrow();
+  });
+
+  test("throws when payload inflates beyond the uncompressed size limit", () => {
+    // A 600 KB repetitive string compresses to a tiny deflate output (well under 50 KB
+    // compressed guard) but inflates back to 600 KB, exceeding the 500 KB uncompressed
+    // guard. This catches the decompression-bomb attack vector.
+    const bigRaw = "a".repeat(600 * 1024);
+    const compressed = deflateSync(Buffer.from(bigRaw));
+    const encoded = compressed.toString("base64");
+    expect(() => deserializeContext(encoded)).toThrow(/uncompressed/i);
   });
 });
 

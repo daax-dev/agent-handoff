@@ -68,6 +68,20 @@ describe("SPIFFE SVID signing and verification", () => {
     });
   });
 
+  test("verify throws SVID_MALFORMED when svidExpiry is not a valid date", async () => {
+    const { svid, privateKey } = createMockSvid("spiffe://example.org/agent/nandate");
+    const trustStore = new Map([[svid.spiffeId, privateKey]]);
+
+    const envelope = signHandoff("payload", svid);
+    // Overwrite expiry with a non-date string — Date.now() > NaN is false, so
+    // without the NaN guard this would silently bypass the expiry check.
+    const bad: HandoffEnvelope = { ...envelope, svidExpiry: "not-a-date" };
+
+    await expect(verifyHandoff(bad, trustStore)).rejects.toMatchObject({
+      code: "SVID_MALFORMED",
+    });
+  });
+
   test("SvidVerificationError.toJSON includes all fields", () => {
     const err = new SvidVerificationError(
       "SVID_EXPIRED",

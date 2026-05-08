@@ -209,7 +209,8 @@ describe("proposeHandoffWithTimeout", () => {
     const result = await proposeHandoffWithTimeout(proposal, slowHandler, 50);
     expect(result.accepted).toBe(false);
     expect((result as HandoffRejection).reason).toBe("ACK_TIMEOUT");
-    expect((result as HandoffRejection).detail).toContain("ms");
+    // Detail must reflect the injected timeout (50ms), not a hardcoded default
+    expect((result as HandoffRejection).detail).toContain("50ms");
   });
 
   test("propagates non-timeout errors from handler", async () => {

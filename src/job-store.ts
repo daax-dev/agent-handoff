@@ -24,6 +24,8 @@ export function createJob(params: {
   authHeaders?: Record<string, string>;
   /** Serialized HandoffContext (base64) for multi-session task continuation (#18) */
   contextPayload?: string;
+  /** SPIFFE ID of the sending agent; stored for future SVID-based verification */
+  senderSpiffeId?: string;
 }): Job {
   const job: Job = {
     id: generateId(),
@@ -40,6 +42,7 @@ export function createJob(params: {
     createdAt: new Date().toISOString(),
     authHeaders: params.authHeaders,
     contextPayload: params.contextPayload,
+    senderSpiffeId: params.senderSpiffeId,
   };
   jobs.set(job.id, job);
   return job;

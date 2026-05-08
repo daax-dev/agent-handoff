@@ -94,6 +94,9 @@ export type NextStep = z.infer<typeof NextStepSchema>;
 // ---------------------------------------------------------------------------
 
 const MAX_COMPRESSED_BYTES = 50 * 1024; // 50 KB
+// base64 encodes 3 bytes as 4 chars; add small margin for padding
+const MAX_ENCODED_CHARS = Math.ceil(MAX_COMPRESSED_BYTES * 4 / 3) + 4;
+const MAX_UNCOMPRESSED_BYTES = 500 * 1024; // 500 KB — prevent decompression bombs
 
 // ---------------------------------------------------------------------------
 // Serialization
@@ -127,14 +130,26 @@ export function serializeContext(ctx: HandoffContext): string {
  * @throws ZodError on schema violations, or Error on decompression failure.
  */
 export function deserializeContext(encoded: string): HandoffContext {
+  // Bound input string length before allocating a Buffer (Comment 5)
+  if (encoded.length > MAX_ENCODED_CHARS) {
+    throw new Error(
+      `Encoded payload length ${encoded.length} chars exceeds limit of ${MAX_ENCODED_CHARS} chars`,
+    );
+  }
   const compressed = Buffer.from(encoded, "base64");
   if (compressed.byteLength > MAX_COMPRESSED_BYTES) {
     throw new Error(
       `Compressed payload ${compressed.byteLength} bytes exceeds limit of ${MAX_COMPRESSED_BYTES} bytes`,
     );
   }
-  const json = inflateSync(compressed).toString("utf8");
-  const raw = JSON.parse(json) as unknown;
+  // Guard against decompression bombs: check uncompressed size before JSON.parse (Comment 6)
+  const decompressed = inflateSync(compressed);
+  if (decompressed.byteLength > MAX_UNCOMPRESSED_BYTES) {
+    throw new Error(
+      `Uncompressed payload ${decompressed.byteLength} bytes exceeds limit of ${MAX_UNCOMPRESSED_BYTES} bytes`,
+    );
+  }
+  const raw = JSON.parse(decompressed.toString("utf8")) as unknown;
   return HandoffContextSchema.parse(raw);
 }
 
