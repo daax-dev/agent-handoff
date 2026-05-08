@@ -1,5 +1,4 @@
-import { describe, test, expect, afterEach } from "./test-compat.js";
-import { jest } from "bun:test";
+import { describe, test, expect, afterEach, vi as jest } from "./test-compat.js";
 import { logHandoff, truncatePrompt, logHandoffEvent } from "../src/utils/logger.js";
 import { existsSync, readFileSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
