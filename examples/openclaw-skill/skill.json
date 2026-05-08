@@ -39,7 +39,7 @@
       "name": "get_change_set",
       "method": "GET",
       "path": "/api/change-sets/{id}",
-      "description": "Get a ChangeSet by ID. Use this to poll the FSM status. Status values: draft, planned, implementing, reviewing, changes_requested, approved, merged, abandoned.",
+      "description": "Get a ChangeSet by ID. Use this to poll the FSM status. Common status values include: draft, planned, implementing, reviewing, changes_requested, awaiting_human_approval, approved, conflict_detected, escalated, merged, abandoned.",
       "parameters": [
         {
           "name": "id",
@@ -108,7 +108,7 @@
         {
           "name": "reason",
           "type": "string",
-          "required": false,
+          "required": true,
           "description": "Reason for rejection. Stored in the audit log."
         },
         {

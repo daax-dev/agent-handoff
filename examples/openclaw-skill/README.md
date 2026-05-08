@@ -89,7 +89,7 @@ APPROVAL_RESPONSE=$(curl -s -X PATCH "$BASE/api/change-sets/$CS_ID/status" \
 APPROVAL_ID=$(echo "$APPROVAL_RESPONSE" | jq -r '.approvalId')
 
 echo "Waiting for human approval... approvalId=$APPROVAL_ID"
-echo "To approve: curl -s -X POST $BASE/api/approvals/$APPROVAL_ID/approve -H 'Content-Type: application/json' -d '{\"decided_by\":\"human\"}'"
+echo "To approve: curl -s -X POST $BASE/api/approvals/$APPROVAL_ID/approve ${AUTH[@]} -H 'Content-Type: application/json' -d '{\"decided_by\":\"human\"}'"
 
 # 5. Approve the gate
 curl -s -X POST "$BASE/api/approvals/$APPROVAL_ID/approve" \

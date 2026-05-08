@@ -872,8 +872,23 @@ describe("Bearer token auth", () => {
   });
 
   test("server without API_TOKEN set passes all requests through", async () => {
-    // BASE server was created before API_TOKEN was set — no auth required
-    const res = await fetch(`${BASE}/api/change-sets`);
-    expect(res.status).toBe(200);
+    const previousApiToken = process.env.API_TOKEN;
+    delete process.env.API_TOKEN;
+
+    const result = createApiServer({ db, sse, port: 0 });
+    const unauthServer = result.server;
+    const unauthBase = `http://localhost:${unauthServer.port}`;
+
+    try {
+      const res = await fetch(`${unauthBase}/api/change-sets`);
+      expect(res.status).toBe(200);
+    } finally {
+      unauthServer.stop(true);
+      if (previousApiToken === undefined) {
+        delete process.env.API_TOKEN;
+      } else {
+        process.env.API_TOKEN = previousApiToken;
+      }
+    }
   });
 });
