@@ -1,572 +1,290 @@
-# agent-handoff — Universal Agent Handoff
+# agent-handoff
 
-An MCP server that lets any AI coding agent delegate tasks to other AI agents. Supports three usage modes: direct CLI spawn, A2A protocol over HTTP, and a shared worker pool — all managed through a unified set of MCP tools.
+**Hand off tasks between AI agents — from any MCP client, to any agent, in three modes.**
 
-## Overview
+Your Claude session shouldn't have to do everything. With agent-handoff, it can spawn a Gemini subprocess to run research, post a task to a remote A2A endpoint, or queue work for a pool of specialized workers — all through the same MCP tools, with full job tracking.
 
-agent-handoff solves a simple problem: your AI coding agent needs to hand off work to another agent. Maybe it needs a specialist, maybe it wants to parallelize, or maybe it wants to fire-and-forget a background task.
+```
+handoff_task({ agent: "claude", prompt: "Write integration tests for src/auth.ts" })
+→ { jobId: "hnd_a1b2c3d4e5f6", status: "queued" }
 
-**11 core MCP tools** cover the main handoff/pool lifecycle: dispatch work, track progress, collect results, and manage workers. Additional ChangeSet and session tools are also available.
+check_status({ jobId: "hnd_a1b2c3d4e5f6" })
+→ { status: "running", durationMs: 18400 }
 
-**3 usage modes** give flexibility in how agents execute:
-
-| Mode | Transport | How it works |
-|------|-----------|-------------|
-| **Push — CLI** | `cli` | Spawns a local agent process (headless or in tmux) |
-| **Push — A2A** | `a2a` | Calls an A2A-compliant HTTP endpoint via JSON-RPC |
-| **Pull — Pool** | `pool` | Queues the task; registered workers pull and execute |
-
-## Quick Start
-
-### Install
-
-```bash
-cd agent-handoff
-bun install
+get_result({ jobId: "hnd_a1b2c3d4e5f6" })
+→ { status: "completed", filesChanged: ["tests/auth.test.ts"], diffSummary: "1 file changed, 87 insertions(+)" }
 ```
 
-### Run the MCP server
+---
+
+## Three ways to delegate
+
+| Mode | When to use | How it works |
+|------|-------------|-------------|
+| **CLI spawn** | Local agent, same machine | Spawns `claude -p`, `codex`, `gemini`, etc. as a child process |
+| **A2A HTTP** | Remote agent or external service | Calls an A2A-compliant JSON-RPC endpoint |
+| **Worker pool** | Multi-agent queues | Tasks sit in a FIFO queue; registered workers pull and execute |
+
+---
+
+## Quick start
 
 ```bash
-bun run start
-# or for development with auto-reload
-bun dev
-```
+# Install dependencies
+cd agent-handoff && bun install
 
-### Add to your MCP client
-
-Add to `~/.mcp.json` or your client's MCP config:
-
-```json
+# Add to your MCP client (e.g. ~/.mcp.json)
 {
   "mcpServers": {
     "agent-handoff": {
       "command": "bun",
-      "args": ["run", "/path/to/agent-handoff/src/index.ts"]
+      "args": ["run", "/absolute/path/to/agent-handoff/src/index.ts"]
     }
   }
 }
 ```
 
-### Basic usage
+> Full installation instructions for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, and VS Code are in [docs/installation-guide.md](docs/installation-guide.md).
 
-```
-You: Use handoff_task to ask claude to refactor the auth module
-Agent: *calls handoff_task with agent="claude", prompt="Refactor the auth module..."*
-Agent: Job hnd_abc123xyz456 created. Checking status...
-Agent: *calls check_status with jobId="hnd_abc123xyz456"*
-Agent: Job is running (45s elapsed)...
-Agent: *calls get_result with jobId="hnd_abc123xyz456"*
-Agent: Done. 3 files changed, all tests passing.
-```
+---
 
-## Usage Modes
+## Usage
 
-### Push Mode — CLI Handoff
+### CLI spawn
 
-Spawn any supported CLI agent as a local process. The agent runs in the background and agent-handoff tracks its output, exit code, and git changes.
+Spawn any supported agent as a background process. agent-handoff captures stdout/stderr, exit code, and the git diff.
 
 ```
 handoff_task({
-  agent: "claude",
-  prompt: "Add input validation to the signup form",
+  agent: "claude",          // claude | codex | gemini | copilot | opencode
+  prompt: "Refactor src/db/queries.ts to use parameterized queries",
   workingDirectory: "/path/to/project",
-  model: "opus"
+  model: "opus",            // optional model override
+  timeoutMs: 120000         // default 300s
 })
 ```
 
-**Response:**
-```json
-{
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "status": "queued",
-  "transport": "cli"
-}
-```
+Use `spawnMode: "tmux"` to open a visible tmux window so you can watch the agent work in real time. The window is named `daax-<agent>`.
 
-#### Tmux spawn mode
+### A2A HTTP endpoint
 
-For real-time visibility into what the agent is doing, use `spawnMode: "tmux"`. This opens a new tmux window where you can watch the agent's output live.
+Register any [A2A-compliant](https://google.github.io/A2A/) agent once, then hand off to it by URL.
 
 ```
-handoff_task({
-  agent: "claude",
-  prompt: "Debug the failing test in auth.test.ts",
-  spawnMode: "tmux"
-})
-```
+register_agent({ url: "https://research-agent.example.com", authToken: "tok_123" })
 
-The tmux window is named `daax-<agent>` (e.g., `daax-claude`). Output is captured from the pane when the command completes.
-
-**Requirements:** tmux must be installed and a session must be active.
-
-#### Git diff tracking
-
-For CLI jobs, agent-handoff automatically:
-1. Snapshots `git rev-parse HEAD` before the agent runs
-2. After completion, runs `git diff --name-only` and `git diff --stat` against the snapshot
-3. Includes `filesChanged` and `diffSummary` in the result
-
-### Push Mode — A2A Handoff
-
-Call any agent that implements the [A2A protocol](https://google.github.io/A2A/) (Agent-to-Agent, JSON-RPC over HTTP).
-
-**Step 1: Register the agent**
-
-```
-register_agent({ url: "https://research-agent.example.com" })
-```
-
-This fetches `/.well-known/agent.json` from the endpoint and caches the agent card (name, description, skills).
-
-**Step 2: Hand off the task**
-
-```
 handoff_task({
   agentUrl: "https://research-agent.example.com",
-  prompt: "Research the latest trends in WebAssembly"
+  prompt: "Summarize Q4 trends in cloud compute pricing"
 })
 ```
 
-**Response:**
-```json
-{
-  "jobId": "hnd_x9y8z7w6v5u4",
-  "status": "queued",
-  "transport": "a2a"
-}
-```
+agent-handoff sends `message/send`, polls `tasks/get`, and returns the result when the task reaches a terminal state.
 
-agent-handoff sends a `message/send` JSON-RPC call, then polls `tasks/get` until the task reaches a terminal state. Results include agent messages and artifacts.
+> Cross-machine delegation, authentication details, and network requirements: [docs/cross-machine-and-auth.md](docs/cross-machine-and-auth.md)
 
-### Pull Mode — Worker Pool
+### Worker pool
 
-Instead of pushing work to a specific agent, queue tasks for any available worker to pick up. This is ideal for multi-agent architectures where agents self-organize.
+Queue tasks for workers to pull. Useful when you want multiple agents running in parallel or when worker availability is dynamic.
 
-**Step 1: Register workers**
-
-Each worker agent calls:
-```
-register_worker({
-  name: "backend-specialist",
-  capabilities: ["typescript", "database"]
-})
-```
-
-**Response:**
-```json
-{
-  "workerId": "wkr_m3n4o5p6q7r8",
-  "name": "backend-specialist",
-  "status": "idle",
-  "capabilities": ["typescript", "database"]
-}
-```
-
-**Step 2: Queue a task**
-
-The coordinator hands off with `pool: true`:
+**Coordinator queues work:**
 ```
 handoff_task({
   agent: "claude",
-  prompt: "Optimize the database queries in user-service",
+  prompt: "Optimize the user-service database queries",
   pool: true,
   requiredCapabilities: ["database"]
 })
+→ { jobId: "hnd_s1t2u3v4w5x6", transport: "pool" }
 ```
 
-**Response:**
-```json
-{
-  "jobId": "hnd_s1t2u3v4w5x6",
-  "status": "queued",
-  "transport": "pool",
-  "mode": "pool"
-}
+**Worker registers and pulls:**
 ```
+register_worker({ name: "db-specialist", capabilities: ["typescript", "database"] })
+→ { workerId: "wkr_m3n4o5p6q7r8" }
 
-**Step 3: Worker pulls and executes**
-
-```
 pull_task({ workerId: "wkr_m3n4o5p6q7r8" })
+→ { available: true, jobId: "hnd_s1t2u3v4w5x6", prompt: "Optimize..." }
 ```
 
-**Response:**
-```json
-{
-  "available": true,
-  "jobId": "hnd_s1t2u3v4w5x6",
-  "prompt": "Optimize the database queries in user-service",
-  "requiredCapabilities": ["database"],
-  "timeoutMs": 300000
-}
+**Worker submits result:**
+```
+submit_result({ workerId: "wkr_m3n4o5p6q7r8", jobId: "hnd_s1t2u3v4w5x6",
+                status: "completed", output: "Reduced p95 latency by 40%" })
 ```
 
-Matching semantics:
-- Jobs with no `requiredCapabilities` are pullable by any idle worker.
-- Jobs with `requiredCapabilities` are only pullable by workers that include all required capability tokens.
-- Matching is capability-aware while preserving FIFO among each worker's matchable jobs.
+Workers must heartbeat every 60 seconds (`worker_heartbeat`) or go offline. Capability matching is exact-token FIFO.
 
-**Step 4: Worker submits result**
+---
+
+## Advanced features
+
+### HandoffContext — pass state between agents
+
+When handing off a partially complete task, attach a `contextPayload` so the receiving agent knows exactly what was done, what decisions were made, and what comes next.
+
+```typescript
+import { createHandoffContext, serializeContext } from "./src/handoff-context.js";
+
+const payload = serializeContext(createHandoffContext({
+  sourceJobId: "hnd_prev123",
+  completed_tasks: [
+    { id: "t-1", title: "Built auth scaffold", completedAt: new Date().toISOString() }
+  ],
+  decisions: [
+    { description: "Use HMAC-SHA256 for signing", rationale: "No SPIFFE lib available",
+      decidedAt: new Date().toISOString() }
+  ],
+  modified_files: [{ path: "src/auth/spiffe.ts", changeType: "added" }],
+  next_steps: [
+    { order: 1, description: "Write integration tests for signHandoff and verifyHandoff" }
+  ],
+  workingContext: { gitBranch: "feat/spiffe-auth", gitHeadSha: "abc1234" }
+}));
+
+handoff_task({ agent: "claude", prompt: "Continue from where I left off", contextPayload: payload })
+```
+
+The payload is deflate-compressed and base64-encoded. Serialization is deterministic (canonical JSON with sorted keys) so the same context always produces the same bytes — safe to sign or cache. Hard limits: 50 KB compressed, 500 KB uncompressed (decompression bomb guard).
+
+### Two-phase DoD handshake
+
+Require the receiving agent to commit to Definition of Done criteria before the task starts. If any required criterion can't be met, the handoff fails fast.
 
 ```
-submit_result({
-  workerId: "wkr_m3n4o5p6q7r8",
-  jobId: "hnd_s1t2u3v4w5x6",
-  status: "completed",
-  output: "Optimized 3 queries, reduced p95 latency by 40%"
+handoff_task({
+  agent: "claude",
+  prompt: "Add OAuth2 support",
+  dodCriteria: [
+    { id: "tests_pass", description: "All tests pass after changes", required: true },
+    { id: "type_check", description: "TypeScript compiles cleanly",  required: true },
+    { id: "docs_updated", description: "API docs updated",           required: false }
+  ]
 })
 ```
 
-**Step 5: Keep workers alive**
+**How evaluation works:**
+- If `RECEIVER_CAPABILITIES` env var is set, the server checks criteria against that list locally. Missing required criteria → `CAPABILITY_MISMATCH` rejection.
+- If `RECEIVER_CAPABILITIES` is not set (the default), the handoff is accepted locally and the remote receiver is expected to evaluate the criteria on its end.
+- A 30-second acknowledgment timeout applies. On timeout, the job fails with `ACK_TIMEOUT`.
 
-Workers must send heartbeats every 60 seconds or they go offline:
-
-```
-worker_heartbeat({ workerId: "wkr_m3n4o5p6q7r8" })
-```
-
-## Tools Reference
-
-### handoff_task
-
-Hand off a task to another AI coding agent via CLI spawn, A2A protocol, or worker pool.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `agent` | `"claude" \| "codex" \| "gemini" \| "copilot" \| "opencode" \| "aider"` | One of `agent` or `agentUrl` | CLI agent to spawn |
-| `agentUrl` | `string` (URL) | One of `agent` or `agentUrl` | A2A agent endpoint URL |
-| `prompt` | `string` | Yes | Task description for the agent |
-| `workingDirectory` | `string` | No | Working directory for CLI agents (defaults to cwd) |
-| `model` | `string` | No | Model override (agent-specific, e.g. "opus", "o3") |
-| `timeoutMs` | `number` | No | Timeout in milliseconds (default: 300000) |
-| `spawnMode` | `"headless" \| "tmux"` | No | Spawn mode for CLI agents (default: "headless") |
-| `pool` | `boolean` | No | If true, queue for worker pool instead of direct spawn |
-| `requiredCapabilities` | `string[]` | No | Required worker capabilities for pool jobs only |
-
-**Validation rules:**
-- Exactly one of `agent` or `agentUrl` must be provided
-- If `agent` is specified, the CLI tool must be available on PATH
-- `requiredCapabilities` is only valid when `pool` is `true`
-- Capability tokens are normalized by trimming whitespace and lowercasing
-
-### check_status
-
-Check the status of a handoff job.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `jobId` | `string` | Yes | The job ID returned by handoff_task |
-
-**Response:**
+**Failure response:**
 ```json
 {
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "status": "running",
-  "transport": "cli",
-  "agent": "claude",
-  "durationMs": 45230
+  "status": "failed",
+  "handshakeStatus": "rejected",
+  "reason": "CAPABILITY_MISMATCH",
+  "detail": "Receiver cannot meet required DoD criteria: tests_pass"
 }
 ```
 
-### get_result
+### Automatic ACK retry
 
-Get the full result of a completed handoff job.
+`ACK_TIMEOUT` rejections are automatically retried with exponential backoff. On each retry the job rolls back to its pre-handshake state so the attempt is clean.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `jobId` | `string` | Yes | The job ID returned by handoff_task |
+| Attempt | Delay |
+|---------|-------|
+| 1st | — |
+| 2nd | 100 ms |
+| 3rd | 200 ms |
+| 4th | 400 ms |
+| 5th | 800 ms |
 
-**CLI job response:**
-```json
-{
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "status": "completed",
-  "transport": "cli",
-  "exitCode": 0,
-  "stdout": "Refactored auth module...",
-  "stderr": "",
-  "filesChanged": ["src/auth.ts", "src/auth.test.ts"],
-  "diffSummary": "2 files changed, 45 insertions(+), 12 deletions(-)"
-}
-```
+After 5 total attempts the job is marked `failed` with `retryExhausted: true`. Non-retryable codes (`CAPABILITY_MISMATCH`, `MALFORMED_PROPOSAL`) never retry.
 
-**A2A job response:**
-```json
-{
-  "jobId": "hnd_x9y8z7w6v5u4",
-  "status": "completed",
-  "transport": "a2a",
-  "stdout": "Agent response text...",
-  "artifacts": [
-    { "name": "report", "text": "Research findings..." }
-  ]
-}
-```
+### SPIFFE identity
 
-If the job is still running, returns:
-```json
-{
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "status": "running",
-  "message": "Job is still in progress. Use check_status to poll."
-}
-```
-
-### list_agents
-
-List available AI coding agents (CLI tools on PATH and registered A2A agents). Takes no parameters.
-
-**Response:**
-```json
-{
-  "cli": [
-    { "name": "claude", "available": true, "command": "claude" },
-    { "name": "codex", "available": false, "command": "codex" },
-    { "name": "gemini", "available": true, "command": "gemini" },
-    { "name": "copilot", "available": false, "command": "copilot" },
-    { "name": "opencode", "available": false, "command": "opencode" },
-    { "name": "aider", "available": false, "command": "aider" }
-  ],
-  "a2a": [
-    { "name": "Research Agent", "url": "https://research.example.com", "skills": ["Research"] }
-  ]
-}
-```
-
-### register_agent
-
-Register an A2A-compliant agent by its endpoint URL. Fetches and caches the agent card from `/.well-known/agent.json`.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | `string` (URL) | Yes | Base URL of the A2A agent |
-
-**Response:**
-```json
-{
-  "registered": true,
-  "name": "Research Agent",
-  "url": "https://research.example.com",
-  "description": "Performs web research",
-  "skills": ["Research", "Summarization"]
-}
-```
-
-### cancel_task
-
-Cancel a running or queued handoff job. Kills the CLI process (SIGTERM) or sends `tasks/cancel` to A2A endpoints.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `jobId` | `string` | Yes | The job ID to cancel |
-
-**Response:**
-```json
-{
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "success": true,
-  "status": "cancelled",
-  "message": "Job cancelled successfully"
-}
-```
-
-Only jobs in `queued` or `running` state can be cancelled.
-
-### register_worker
-
-Register as a worker in the task pool.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | `string` | Yes | Worker name (e.g. agent identity) |
-| `capabilities` | `string[]` | No | Worker capabilities for task matching |
-
-**Response:**
-```json
-{
-  "workerId": "wkr_m3n4o5p6q7r8",
-  "name": "backend-specialist",
-  "status": "idle",
-  "capabilities": ["typescript", "database"],
-  "message": "Worker registered. Use pull_task to get work, worker_heartbeat to stay alive."
-}
-```
-
-### pull_task
-
-Pull the next available task from the pool queue. Worker must be registered and idle.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workerId` | `string` | Yes | Your worker ID from register_worker |
-
-**Response (task available):**
-```json
-{
-  "available": true,
-  "jobId": "hnd_s1t2u3v4w5x6",
-  "prompt": "Optimize database queries",
-  "workingDirectory": "/path/to/project",
-  "model": "opus",
-  "requiredCapabilities": ["database"],
-  "timeoutMs": 300000
-}
-```
-
-**Response (no tasks):**
-```json
-{
-  "available": false,
-  "message": "No compatible tasks in queue"
-}
-```
-
-### submit_result
-
-Submit the result of a completed task back to the pool.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workerId` | `string` | Yes | Your worker ID |
-| `jobId` | `string` | Yes | The job ID you were assigned |
-| `status` | `"completed" \| "failed"` | Yes | Task outcome |
-| `output` | `string` | No | Task output / result text |
-| `error` | `string` | No | Error message if failed |
-
-**Response:**
-```json
-{
-  "acknowledged": true,
-  "jobId": "hnd_s1t2u3v4w5x6",
-  "workerStatus": "idle"
-}
-```
-
-### worker_heartbeat
-
-Send a heartbeat to keep your worker registration alive. Workers go offline after 60 seconds without a heartbeat.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workerId` | `string` | Yes | Your worker ID |
-
-**Response:**
-```json
-{
-  "workerId": "wkr_m3n4o5p6q7r8",
-  "status": "idle",
-  "lastHeartbeatAt": "2026-02-14T12:00:00.000Z"
-}
-```
-
-### list_workers
-
-List all registered workers and their current status. Takes no parameters.
-
-**Response:**
-```json
-{
-  "total": 3,
-  "idle": 2,
-  "busy": 1,
-  "offline": 0,
-  "workers": [
-    {
-      "id": "wkr_m3n4o5p6q7r8",
-      "name": "backend-specialist",
-      "status": "busy",
-      "capabilities": ["typescript", "database"],
-      "currentJobId": "hnd_s1t2u3v4w5x6",
-      "lastHeartbeatAt": "2026-02-14T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-## Supported CLI Agents
-
-| Agent | Command | Output Format | Notes |
-|-------|---------|---------------|-------|
-| **Claude** | `claude` | JSON (`--output-format json`) | Supports `--model` override |
-| **Codex** | `codex` | JSONL (`exec --json`) | Prompt sent via stdin |
-| **Gemini** | `gemini` | JSON (`--output-format json`) | Supports `--model` override |
-| **Copilot** | `copilot` | Plain text | No structured output |
-| **OpenCode** | `opencode` | JSON (`-f json`) | Supports `--model` override |
-| **Aider** | `aider` | Plain text | Supports `--model` override |
-
-All agents are auto-detected via `PATH`. Use `list_agents` to see which are available on your system.
-
-## Architecture
+Attach a sender SPIFFE ID to any handoff for identity tracing. Stored on the job; not yet enforced for access control.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     MCP Client                          │
-│              (Claude, Cursor, etc.)                     │
-└───────────────────────┬─────────────────────────────────┘
-                        │ stdio (MCP protocol)
-┌───────────────────────▼─────────────────────────────────┐
-│                   agent-handoff server                       │
-│                                                         │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ Tool Router  │  │  Job Store   │  │    Logger     │  │
-│  │ (11 tools)   │  │ (in-memory)  │  │ (.logs/tools) │  │
-│  └──────┬───┬──┘  └──────────────┘  └───────────────┘  │
-│         │   │                                           │
-│  ┌──────▼───┼──────────┬────────────────────────────┐   │
-│  │          │          │                            │   │
-│  │  ┌───────▼──┐  ┌────▼─────┐  ┌────────────────┐ │   │
-│  │  │CLI Runner│  │A2A Client│  │  Worker Pool    │ │   │
-│  │  │          │  │          │  │                  │ │   │
-│  │  │ Headless │  │ JSON-RPC │  │ ┌────────────┐  │ │   │
-│  │  │ or Tmux  │  │ over HTTP│  │ │ Job Queue  │  │ │   │
-│  │  └──┬───┬──┘  └────┬─────┘  │ │ (FIFO)     │  │ │   │
-│  │     │   │          │        │ └────────────┘  │ │   │
-│  │     │   │          │        │ ┌────────────┐  │ │   │
-│  │     │   │          │        │ │  Worker    │  │ │   │
-│  │     │   │          │        │ │  Registry  │  │ │   │
-│  │     │   │          │        │ └────────────┘  │ │   │
-│  │     │   │          │        └────────────────┘ │   │
-│  └─────┼───┼──────────┼──────────────────────────┘   │
-│         │   │          │                               │
-└─────────┼───┼──────────┼───────────────────────────────┘
-          │   │          │
-    ┌─────▼┐ ┌▼────┐  ┌──▼──────────────┐
-    │claude│ │tmux │  │ A2A Agent       │
-    │codex │ │pane │  │ (HTTP endpoint) │
-    │gemini│ │     │  └─────────────────┘
-    │...   │ │     │
-    └──────┘ └─────┘
+handoff_task({
+  agentUrl: "https://agent.example.com",
+  prompt: "...",
+  senderSpiffeId: "spiffe://trust-domain.example.com/agent/coordinator"
+})
 ```
 
-### Key internals
+`src/auth/spiffe.ts` provides `signHandoff` / `verifyHandoff` for HMAC-SHA256 envelope signing with expiry checks, for use when building agents that emit or consume signed handoffs.
 
-- **Job Store** (`src/job-store.ts`): In-memory Map of all jobs, keyed by `hnd_*` ID. CRUD operations.
-- **Job Runner** (`src/job-runner.ts`): Spawns CLI processes or manages A2A polling. Tracks git state before/after.
-- **CLI Adapters** (`src/cli/`): Per-agent adapters that build command args and parse output. Base class handles process spawning.
-- **Tmux Spawner** (`src/cli/tmux-spawner.ts`): Creates tmux windows, sends commands, captures pane output on completion.
-- **A2A Client** (`src/a2a/client.ts`): JSON-RPC client for `message/send`, `tasks/get`, `tasks/cancel`. Includes polling.
-- **Agent Card** (`src/a2a/agent-card.ts`): Fetches and caches `/.well-known/agent.json` for A2A discovery.
-- **Worker Pool** (`src/pool/`): FIFO job queue + worker registry with heartbeat-based liveness.
-- **Logger** (`src/utils/logger.ts`): Appends JSONL entries per completed handoff.
+---
 
-### Job lifecycle
+## Tools reference
 
-```
-queued → running → completed
-                 → failed
-                 → timed_out
-       → cancelled
-```
+### Core handoff tools
 
-Job IDs use the format `hnd_<12 alphanumeric chars>` (e.g., `hnd_a1b2c3d4e5f6`).
-Worker IDs use `wkr_<12 alphanumeric chars>`.
+| Tool | Description |
+|------|-------------|
+| `handoff_task` | Dispatch a task (CLI spawn, A2A, or pool) |
+| `check_status` | Poll job status |
+| `get_result` | Retrieve full output and git diff |
+| `cancel_task` | Kill a running or queued job |
+| `list_agents` | List available CLI agents and registered A2A agents |
+| `register_agent` | Register an A2A endpoint (fetches agent card) |
+
+### Pool tools
+
+| Tool | Description |
+|------|-------------|
+| `register_worker` | Join the worker pool with optional capabilities |
+| `pull_task` | Claim the next compatible queued task |
+| `submit_result` | Report task outcome back to the pool |
+| `worker_heartbeat` | Keep worker registration alive (60s TTL) |
+| `list_workers` | Show all workers and their current status |
+
+### `handoff_task` parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `agent` | `"claude" \| "codex" \| "gemini" \| "copilot" \| "opencode"` | CLI agent to spawn |
+| `agentUrl` | `string` (URL) | A2A endpoint URL (mutually exclusive with `agent`) |
+| `prompt` | `string` | Task description |
+| `workingDirectory` | `string` | Working directory for CLI agents |
+| `model` | `string` | Model override (e.g. `"opus"`, `"o3"`, `"gemini-2.5-flash"`) |
+| `timeoutMs` | `number` | Job timeout in ms (default: 300 000) |
+| `spawnMode` | `"headless" \| "tmux"` | CLI spawn mode (default: `"headless"`) |
+| `pool` | `boolean` | Queue for worker pool instead of direct spawn |
+| `requiredCapabilities` | `string[]` | Required capabilities for pool jobs |
+| `contextPayload` | `string` | Base64 HandoffContext from `serializeContext()` |
+| `dodCriteria` | `{ id, description, required? }[]` | DoD criteria for two-phase handshake |
+| `senderSpiffeId` | `string` | Sender SPIFFE ID (stored; not enforced) |
+
+**Rules:** exactly one of `agent` or `agentUrl`; `requiredCapabilities` only when `pool: true`; CLI agent must be on PATH.
+
+---
+
+## Supported CLI agents
+
+| Agent | Command | Output | Notes |
+|-------|---------|--------|-------|
+| Claude | `claude` | JSON | `--output-format json`, supports `--model` |
+| Codex | `codex` | JSONL | Prompt via stdin, `exec --json` |
+| Gemini | `gemini` | JSON | `--output-format json`, supports `--model` |
+| Copilot | `copilot` | Plain text | No structured output |
+| OpenCode | `opencode` | JSON | `-f json`, supports `--model` |
+
+All detected via `PATH`. Use `list_agents` to see what's available on your system.
+
+---
+
+## Configuration
+
+All state is in-memory and resets on server restart. No config files.
+
+| Environment variable | Default | Purpose |
+|---------------------|---------|---------|
+| `RECEIVER_CAPABILITIES` | _(unset)_ | Comma-separated capability IDs for local DoD evaluation. When unset, `dodCriteria` handshakes are accepted locally (remote receiver evaluates). |
+| `HAWKEYE_URL` | _(unset)_ | HTTP endpoint to POST a structured warning when a handshake times out. Best-effort. |
+| `HANDOFF_LOG_PROMPTS` | `false` | Set to `"true"` to include prompt text (≤500 chars) in JSONL logs. Redacted by default. |
+
+**CLI agent auth:** agents inherit the full shell environment — API keys, PATH entries, tool configs — all available automatically.
+
+**A2A auth:** pass `authToken` or `authHeaders` to `register_agent`. Headers are sent on every subsequent request. Not persisted across restarts.
+
+---
 
 ## Logging
 
-Every completed handoff is logged as JSONL to `.logs/tools/handoff-YYYY-MM-DD.jsonl`.
-
-**Log entry format:**
+Every completed handoff is appended to `.logs/tools/handoff-YYYY-MM-DD.jsonl` (created automatically).
 
 ```json
 {
@@ -581,79 +299,92 @@ Every completed handoff is logged as JSONL to `.logs/tools/handoff-YYYY-MM-DD.js
 }
 ```
 
-The `.logs/tools/` directory is created automatically on first write.
+---
 
-## Configuration
+## Architecture
 
-agent-handoff uses no external configuration files. All state is in-memory and resets on server restart.
+```
+MCP client (Claude Code, Cursor…)
+       │ stdio
+agent-handoff server
+  ├── handoff_task ──► CLI Runner (headless / tmux)
+  │                       ├── claude -p …
+  │                       ├── codex exec …
+  │                       └── gemini -p …
+  ├── handoff_task ──► A2A Client (JSON-RPC over HTTP)
+  │                       └── message/send → tasks/get → tasks/cancel
+  ├── handoff_task ──► Worker Pool (FIFO queue)
+  │    pull_task ◄──       └── workers pull, execute, submit
+  │
+  └── Job Store (in-memory Map, hnd_* IDs)
+       ├── snapshot / rollback (DoD retry safety)
+       └── JSONL logger (.logs/tools/)
+```
 
-**Environment:** The server inherits the shell environment from the parent process. CLI agents are spawned with the same environment, so API keys, PATH entries, and tool configs are available to child processes.
+Key modules:
 
-**Timeouts:** Default job timeout is 300,000ms (5 minutes). Override per-job with `timeoutMs`.
+| Module | Role |
+|--------|------|
+| `src/job-store.ts` | In-memory job store with snapshot/rollback for retry safety |
+| `src/handoff-context.ts` | HandoffContext schema, canonical serialization, deflate codec |
+| `src/a2a/handshake.ts` | Two-phase DoD handshake, 30s timeout, Hawkeye escalation |
+| `src/a2a/retry.ts` | Exponential backoff retry (ACK_TIMEOUT only, 5 attempts max) |
+| `src/auth/spiffe.ts` | HMAC-SHA256 envelope signing and SVID verification |
+| `src/cli/` | Per-agent adapters (arg building, output parsing, PATH detection) |
+| `src/pool/` | FIFO job queue + worker registry with heartbeat liveness |
+| `src/utils/logger.ts` | JSONL file logger (prompts redacted by default) |
 
-**Heartbeat:** Workers go offline after 60 seconds without a heartbeat. Sending a heartbeat to an offline worker brings it back online.
+---
 
 ## Development
 
-### Running tests
-
 ```bash
-bun test
+bun test          # run all tests (vitest)
+bun run typecheck # tsc --noEmit
 ```
 
-Tests are in `tests/` and cover:
-- `job-store.test.ts` — CRUD operations on the job store
-- `cli-adapters.test.ts` — Adapter arg building, output parsing, registry
-- `a2a-client.test.ts` — Agent card registration, JSON-RPC client (mocked fetch)
-- `tools.test.ts` — Tool handler logic (check_status, get_result, list_agents, cancel_task)
-- `logger.test.ts` — JSONL log writing
+Test files:
 
-### Adding a new CLI adapter
+| File | Covers |
+|------|--------|
+| `handoff-context.test.ts` | Schema, roundtrip, size limits, decompression bomb |
+| `handshake.test.ts` | Two-phase handshake, timeout, escalation, schemas |
+| `handshake-retry.test.ts` | Exponential backoff, exhaustion, snapshot/rollback |
+| `spiffe.test.ts` | signHandoff, verifyHandoff, expiry, malformed inputs |
+| `pool.test.ts` | Worker registration, FIFO matching, heartbeat liveness |
+| `job-store.test.ts` | CRUD, snapshot, rollback |
+| `cli-adapters.test.ts` | Adapter arg building, output parsing, registry |
+| `a2a-client.test.ts` | Agent card, JSON-RPC client (mocked fetch) |
+| `tools.test.ts` | check_status, get_result, list_agents, cancel_task handlers |
+| `logger.test.ts` | JSONL write, prompt redaction |
 
-1. Create `src/cli/<name>.ts` extending `BaseAdapter`
-2. Implement `buildArgs()` and `parseOutput()`
-3. Add the agent name to the `AgentName` type in `src/types.ts`
-4. Register the adapter in `src/cli/registry.ts`
-5. Add tests in `tests/cli-adapters.test.ts`
+### Adding a CLI adapter
 
-### Project structure
+1. Create `src/cli/<name>.ts` extending `BaseAdapter`; implement `buildArgs()` and `parseOutput()`
+2. Add the agent name to `AgentName` in `src/types.ts`
+3. Register in `src/cli/registry.ts`
+4. Add tests in `tests/cli-adapters.test.ts`
+
+### Project layout
 
 ```
 src/
-  index.ts              # MCP server setup, tool registration
-  job-store.ts          # In-memory job store (Map)
-  job-runner.ts         # CLI spawn + A2A polling orchestration
-  types.ts              # All TypeScript interfaces
-  cli/
-    base-adapter.ts     # Abstract adapter with process spawning
-    claude.ts           # Claude Code adapter
-    codex.ts            # OpenAI Codex adapter (stdin-based)
-    gemini.ts           # Google Gemini adapter
-    copilot.ts          # GitHub Copilot adapter
-    opencode.ts         # OpenCode adapter
-    registry.ts         # Adapter registry + PATH detection
-    tmux-spawner.ts     # Tmux window management
-  a2a/
-    types.ts            # A2A protocol types (AgentCard, Task, JSON-RPC)
-    client.ts           # JSON-RPC client (send, get, cancel, poll)
-    agent-card.ts       # Agent card fetch + registration cache
-  pool/
-    job-queue.ts        # FIFO queue for pool mode
-    worker-registry.ts  # Worker lifecycle + heartbeat tracking
-  tools/
-    handoff-task.ts     # handoff_task handler
-    check-status.ts     # check_status handler
-    get-result.ts       # get_result handler
-    list-agents.ts      # list_agents handler
-    register-agent.ts   # register_agent handler
-    cancel-task.ts      # cancel_task handler
-    register-worker.ts  # register_worker handler
-    pull-task.ts        # pull_task handler
-    submit-result.ts    # submit_result handler
-    worker-heartbeat.ts # worker_heartbeat handler
-    list-workers.ts     # list_workers handler
-  utils/
-    git.ts              # Git HEAD snapshot + diff helpers
-    logger.ts           # JSONL file logger
-tests/                  # bun:test test files
+  index.ts              MCP server, 23 tools registered
+  job-store.ts          In-memory jobs + snapshot/rollback
+  job-runner.ts         CLI spawn + A2A polling
+  handoff-context.ts    HandoffContext schema + codec
+  types.ts              All interfaces and event types
+  cli/                  Per-agent adapters + tmux spawner
+  a2a/                  A2A client, agent card, handshake, retry
+  auth/                 SPIFFE/SVID envelope signing
+  pool/                 FIFO queue + worker registry
+  tools/                11 core tool handlers
+  mcp-tools/            ChangeSet and session tool handlers
+  utils/                Git helpers + JSONL logger
+tests/                  Vitest tests (130 tests, 0 failing)
+docs/
+  installation-guide.md Full setup for all MCP clients
+  cross-machine-and-auth.md Cross-machine limits + auth patterns
+examples/
+  demo-non-claude-agents.md CLI hand-off examples (Codex, Gemini, Copilot)
 ```

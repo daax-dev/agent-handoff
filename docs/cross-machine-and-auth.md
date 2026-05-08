@@ -64,7 +64,6 @@ Your shell (ANTHROPIC_API_KEY=sk-ant-...)
 | Gemini | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Google API access |
 | Copilot | GitHub CLI auth (`gh auth login`) | GitHub authentication |
 | OpenCode | Varies by provider config | Provider-specific |
-| Aider | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, etc. | Supports many providers |
 
 **No configuration needed.** If the API key works when you run the agent directly in your terminal, it works through agent-handoff. The spawned process gets the same environment.
 

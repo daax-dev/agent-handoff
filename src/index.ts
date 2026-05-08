@@ -265,7 +265,7 @@ server.tool(
   "register_session",
   "Register this agent as a pre-spawned session available for task dispatch. Call once at startup, then poll claim_task to receive work.",
   {
-    tool: z.enum(["claude-code", "codex", "cursor", "copilot-cli", "gemini", "aider", "human"]).describe("This agent's tool identifier"),
+    tool: z.enum(["claude-code", "codex", "cursor", "copilot-cli", "gemini", "human"]).describe("This agent's tool identifier"),
     roles: z.array(z.string()).optional().describe("Roles this session can handle (empty = any role)"),
   },
   async (args) => {
