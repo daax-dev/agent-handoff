@@ -13,14 +13,14 @@ OpenClaw ([openclaw.ai](https://openclaw.ai)) is a local-first personal AI assis
 Three integration paths exist today:
 
 **Option A — REST API + OpenClaw skill plugin** (recommended): Use the documented REST API directly from an OpenClaw skill. A ready-to-use skill descriptor and setup guide live in [`examples/openclaw-skill/`](../examples/openclaw-skill/). Your OpenClaw skill:
-1. Calls `POST /api/change-sets` to create a ChangeSet (spawns a git worktree)
-2. Calls `POST /api/tasks` to queue work for an agent role (implementer, reviewer, etc.)
-3. Polls `GET /api/tasks/:id` until the task status is `completed` or `failed`
-4. Advances the FSM via `PATCH /api/change-sets/:id/status` with the appropriate trigger
+1. Calls `POST /api/change-sets/quick-create` with just a `title` — auto-generates the task ID, branch, and worktree path
+2. Advances the FSM via `PATCH /api/change-sets/:id/status` with triggers (`plan_accepted`, `assign_implementer`, `submit_for_review`, `approve`, `merge`)
+3. Polls `GET /api/change-sets/:id` until `.status` reaches the desired state
+4. When a HITL gate returns `202 + approvalId`, calls `POST /api/approvals/:approvalId/approve` to advance past it
 
-See [`docs/rest-api.md`](rest-api.md) for the full API reference with curl examples, auth setup, and a complete end-to-end workflow.
+See [`docs/rest-api.md`](rest-api.md) for the full API reference with correct trigger names, curl examples, auth setup, and a complete end-to-end workflow.
 
-**Optional: secure the API with a bearer token.** Set `API_TOKEN=your-secret-token` when starting agent-handoff. The skill will send `Authorization: Bearer <token>` on every request. The health endpoint is always exempt.
+**Optional: secure the API with a bearer token.** Set `API_TOKEN=your-secret-token` when starting agent-handoff. The skill will send `Authorization: Bearer <token>` on every request. The health endpoint and the Vite UI dev-server origin are always exempt.
 
 **Option B — Use Claude Code as the thin orchestrator layer**: Run Claude Code with agent-handoff registered as an MCP server (`claude mcp add agent-handoff -- bun run <path>/src/index.ts`). Point OpenClaw's automation at the Claude Code session as the decision-maker. OpenClaw triggers intent; Claude Code + agent-handoff do the SDLC coordination.
 

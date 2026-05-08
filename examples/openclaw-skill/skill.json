@@ -1,6 +1,6 @@
 {
   "name": "agent-handoff",
-  "description": "Coordinate multi-agent AI development workflows via agent-handoff. Create ChangeSets, queue implementation tasks, poll for results, and manage HITL approval gates.",
+  "description": "Coordinate multi-agent AI development workflows via agent-handoff. Create ChangeSets, advance FSM states, and manage HITL approval gates.",
   "version": "1.0.0",
   "base_url": "http://localhost:4000",
   "auth": {
@@ -18,8 +18,8 @@
     {
       "name": "create_change_set",
       "method": "POST",
-      "path": "/api/change-sets",
-      "description": "Create a new ChangeSet — the unit of work representing one task, one git worktree, and one FSM lifecycle. Returns the ChangeSet ID needed for subsequent calls.",
+      "path": "/api/change-sets/quick-create",
+      "description": "Create a new ChangeSet with a title. Auto-generates the task ID, branch name, and worktree path. Returns the ChangeSet ID needed for subsequent calls.",
       "parameters": [
         {
           "name": "title",
@@ -28,71 +28,33 @@
           "description": "Human-readable title for the task, e.g. 'Add rate limiting to POST /api/users'"
         },
         {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "description": "Task identifier in TSK_NNNNNN format, e.g. 'TSK_000001'"
-        },
-        {
-          "name": "targetBranch",
+          "name": "description",
           "type": "string",
           "required": false,
-          "description": "Git branch to base the worktree on. Defaults to 'main'."
-        },
-        {
-          "name": "specContent",
-          "type": "string",
-          "required": false,
-          "description": "Full task specification in markdown. Stored as the agent's task spec."
+          "description": "Optional extended description of the task."
         }
       ]
     },
     {
-      "name": "queue_task",
-      "method": "POST",
-      "path": "/api/tasks",
-      "description": "Queue a task for an agent session to pick up. The agent will implement, review, or otherwise process the ChangeSet according to its assigned role.",
-      "parameters": [
-        {
-          "name": "changeSetId",
-          "type": "string",
-          "required": true,
-          "description": "ChangeSet ID returned by create_change_set, in chg_NNNNNN format"
-        },
-        {
-          "name": "role",
-          "type": "string",
-          "required": true,
-          "description": "Agent role to assign. One of: implementer, reviewer, fixer, planner, qa_agent, summarizer"
-        },
-        {
-          "name": "prompt",
-          "type": "string",
-          "required": false,
-          "description": "Optional override prompt for the agent. If omitted, the role's default system prompt is used."
-        }
-      ]
-    },
-    {
-      "name": "poll_task",
+      "name": "get_change_set",
       "method": "GET",
-      "path": "/api/tasks/{id}",
-      "description": "Poll the status of a queued task. Call repeatedly until status is 'completed' or 'failed'. Status values: queued, running, completed, failed.",
+      "path": "/api/change-sets/{id}",
+      "description": "Get a ChangeSet by ID. Use this to poll the FSM status. Status values: draft, planned, implementing, reviewing, changes_requested, approved, merged, abandoned.",
       "parameters": [
         {
           "name": "id",
           "type": "string",
           "required": true,
           "in": "path",
-          "description": "Task ID in TSK_NNNNNN format, as returned by queue_task"
+          "description": "ChangeSet ID in chg_NNNNNN format, as returned by create_change_set"
         }
       ]
     },
     {
-      "name": "transition_change_set",
+      "name": "advance_fsm",
       "method": "PATCH",
       "path": "/api/change-sets/{id}/status",
-      "description": "Advance the ChangeSet FSM via a named trigger. Returns the updated ChangeSet, or 202 with approvalId when a HITL gate is hit (e.g. approve, merge).",
+      "description": "Advance the ChangeSet FSM via a named trigger. Returns the updated ChangeSet, or 202 with approvalId when a HITL gate is hit (e.g. approve, merge). Available triggers: plan_accepted, assign_implementer, submit_for_review, request_changes, approve, pick_up_revision, merge, abandon.",
       "parameters": [
         {
           "name": "id",
@@ -105,7 +67,7 @@
           "name": "trigger",
           "type": "string",
           "required": true,
-          "description": "FSM trigger name. Common values: start_implementation, submit_for_review, request_changes, approve, merge"
+          "description": "FSM trigger name. Common values: plan_accepted, assign_implementer, submit_for_review, approve, merge"
         }
       ]
     },
@@ -113,7 +75,7 @@
       "name": "approve_hitl_gate",
       "method": "POST",
       "path": "/api/approvals/{approvalId}/approve",
-      "description": "Approve a pending HITL (human-in-the-loop) gate. Use the approvalId returned by a 202 response from transition_change_set.",
+      "description": "Approve a pending HITL (human-in-the-loop) gate. Use the approvalId returned by a 202 response from advance_fsm.",
       "parameters": [
         {
           "name": "approvalId",
@@ -127,6 +89,33 @@
           "type": "string",
           "required": false,
           "description": "Identity of the approver, e.g. 'openclaw-skill' or a user name. Stored in the audit log."
+        }
+      ]
+    },
+    {
+      "name": "reject_hitl_gate",
+      "method": "POST",
+      "path": "/api/approvals/{approvalId}/reject",
+      "description": "Reject a pending HITL gate and return the ChangeSet to the previous state.",
+      "parameters": [
+        {
+          "name": "approvalId",
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "UUID returned in the approvalId field of a 202 response"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "required": false,
+          "description": "Reason for rejection. Stored in the audit log."
+        },
+        {
+          "name": "decided_by",
+          "type": "string",
+          "required": false,
+          "description": "Identity of the rejector."
         }
       ]
     }

@@ -18,8 +18,16 @@ import { json, notFound } from "./response.js";
 
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  // Allow any localhost port in API range (4000-4009) or UI range (5173-5182)
+  // Allow any localhost port in API range (4000-4999) or UI range (5173-5182) for CORS
   return /^http:\/\/(localhost|127\.0\.0\.1):(4\d{3}|517[3-9]|518[0-2])$/.test(origin);
+}
+
+// Narrower predicate used only for bearer-auth exemption.
+// Only exempts the Vite UI dev-server range — non-browser clients can spoof Origin
+// headers, so this is a known local-dev trade-off, not a production security guarantee.
+function isUiOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  return /^http:\/\/(localhost|127\.0\.0\.1):(517[3-9]|518[0-2])$/.test(origin);
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -75,8 +83,8 @@ export function createApiServer(options: ServerOptions) {
       }
 
       // Bearer token auth — opt-in when API_TOKEN is set
-      // Exempt: health (above), OPTIONS (above), requests from allowed localhost origins (UI)
-      if (apiToken && !isAllowedOrigin(origin)) {
+      // Exempt: health (above), OPTIONS (above), Vite UI dev-server origins (5173-5182)
+      if (apiToken && !isUiOrigin(origin)) {
         const authHeader = req.headers.get("Authorization") ?? "";
         const expected = `Bearer ${apiToken}`;
         if (authHeader !== expected) {

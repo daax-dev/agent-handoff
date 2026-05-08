@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:bun": "bun run test",
+    "test:api": "bun test src/__tests__/api.test.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
