@@ -819,7 +819,9 @@ describe("Bearer token auth", () => {
   let authServer: ReturnType<typeof Bun.serve>;
   let authBase: string;
 
+  let previousApiToken: string | undefined;
   beforeAll(() => {
+    previousApiToken = process.env.API_TOKEN;
     process.env.API_TOKEN = TEST_TOKEN;
     const result = createApiServer({ db, sse, port: 0 });
     authServer = result.server;
@@ -827,7 +829,11 @@ describe("Bearer token auth", () => {
   });
 
   afterAll(() => {
-    delete process.env.API_TOKEN;
+    if (previousApiToken === undefined) {
+      delete process.env.API_TOKEN;
+    } else {
+      process.env.API_TOKEN = previousApiToken;
+    }
     authServer.stop(true);
   });
 
