@@ -17,7 +17,9 @@ When `API_TOKEN` is set:
 - All requests must include `Authorization: Bearer <token>`
 - Requests missing the header or with a wrong token receive `401 Unauthorized`
 - `GET /api/health` is always exempt
-- Requests from localhost UI origins (ports 5173–5182) are always exempt
+- Requests from the Vite UI dev-server (localhost ports 5173–5182) are always exempt
+
+> **Note:** Origin-based exemption is bypassable by non-browser clients that can send arbitrary `Origin` headers. This is a known trade-off for a local dev tool — for production use, require the token on all callers.
 
 ### Curl examples — with auth
 
@@ -27,10 +29,8 @@ Add `-H "Authorization: Bearer $API_TOKEN"` to every request:
 curl -s http://localhost:4000/api/health
 # {"ok":true,"ts":"..."}  — health is always exempt
 
-curl -s -X POST http://localhost:4000/api/change-sets \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"title":"Add rate limiting","taskId":"TSK_000001","targetBranch":"main"}'
+curl -s http://localhost:4000/api/change-sets \
+  -H "Authorization: Bearer $API_TOKEN"
 ```
 
 ### Curl examples — without auth (API_TOKEN unset)
@@ -38,9 +38,7 @@ curl -s -X POST http://localhost:4000/api/change-sets \
 ```bash
 curl -s http://localhost:4000/api/health
 
-curl -s -X POST http://localhost:4000/api/change-sets \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Add rate limiting","taskId":"TSK_000001","targetBranch":"main"}'
+curl -s http://localhost:4000/api/change-sets
 ```
 
 ---
@@ -64,17 +62,15 @@ curl -s http://localhost:4000/api/health
 
 A **ChangeSet** is the unit of work — one task, one git worktree, one FSM lifecycle.
 
-#### `POST /api/change-sets`
+#### `POST /api/change-sets/quick-create`
 
-Create a new ChangeSet. Spawns a git worktree on the target branch.
+Create a new ChangeSet with auto-generated IDs, branch name, and worktree path. This is the recommended endpoint for external orchestrators — you only need to supply a title.
 
 **Request body:**
 ```json
 {
   "title": "string (required)",
-  "taskId": "TSK_NNNNNN (required)",
-  "targetBranch": "string (default: main)",
-  "specContent": "string (optional — task specification markdown)"
+  "description": "string (optional)"
 }
 ```
 
@@ -84,41 +80,34 @@ Create a new ChangeSet. Spawns a git worktree on the target branch.
   "id": "chg_000001",
   "task_id": "TSK_000001",
   "title": "Add rate limiting",
+  "description": "",
   "status": "draft",
+  "source_branch": "feat/tsk-000001",
+  "target_branch": "main",
   "worktree_path": ".work/worktrees/TSK_000001",
-  "branch": "feat/TSK_000001",
   "created_at": "2026-05-08T14:00:00.000Z"
 }
 ```
 
 ```bash
-curl -s -X POST http://localhost:4000/api/change-sets \
+curl -s -X POST http://localhost:4000/api/change-sets/quick-create \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_TOKEN" \
-  -d '{
-    "title": "Add rate limiting to POST /api/users",
-    "taskId": "TSK_000001",
-    "targetBranch": "main"
-  }'
+  -d '{"title":"Add rate limiting to POST /api/users"}'
 ```
 
 #### `GET /api/change-sets`
 
-List all ChangeSets. Optionally filter by status.
+List all ChangeSets.
 
 ```bash
-# All ChangeSets
 curl -s http://localhost:4000/api/change-sets \
-  -H "Authorization: Bearer $API_TOKEN"
-
-# Only reviewing
-curl -s "http://localhost:4000/api/change-sets?status=reviewing" \
   -H "Authorization: Bearer $API_TOKEN"
 ```
 
 #### `GET /api/change-sets/:id`
 
-Get a single ChangeSet by ID.
+Get a single ChangeSet by ID. Use this to poll for FSM state changes.
 
 ```bash
 curl -s http://localhost:4000/api/change-sets/chg_000001 \
@@ -129,27 +118,30 @@ curl -s http://localhost:4000/api/change-sets/chg_000001 \
 
 Advance the ChangeSet FSM via a named trigger. Returns the updated ChangeSet, or `202 Accepted` with an `approvalId` when the transition hits a HITL gate.
 
-**Request body (FSM trigger — preferred):**
+**Request body:**
 ```json
-{ "trigger": "start_implementation" }
+{ "trigger": "plan_accepted" }
 ```
 
-Available triggers depend on the current FSM state. Common ones:
+Available FSM triggers:
 
 | Trigger | From state | To state |
 |---------|-----------|---------|
-| `start_implementation` | `draft` | `implementing` |
+| `plan_accepted` | `draft` | `planned` |
+| `assign_implementer` | `planned` | `implementing` |
 | `submit_for_review` | `implementing` | `reviewing` |
 | `request_changes` | `reviewing` | `changes_requested` |
 | `approve` | `reviewing` | `approved` (HITL gate — returns 202) |
+| `pick_up_revision` | `changes_requested` | `implementing` |
 | `merge` | `approved` | `merged` (HITL gate) |
+| `abandon` | any | `abandoned` |
 
 ```bash
-# Submit for review
+# Advance to planned
 curl -s -X PATCH http://localhost:4000/api/change-sets/chg_000001/status \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"trigger":"submit_for_review"}'
+  -d '{"trigger":"plan_accepted"}'
 
 # Approve (HITL — returns 202 + approvalId)
 curl -s -X PATCH http://localhost:4000/api/change-sets/chg_000001/status \
@@ -163,62 +155,35 @@ curl -s -X PATCH http://localhost:4000/api/change-sets/chg_000001/status \
 
 ### Tasks
 
-A **Task** is a unit of queued work dispatched to an agent session.
+A **Task** is a DB record representing a unit of structured work within a ChangeSet. Tasks have required filesystem paths (spec file, acceptance criteria file) and are typically created by the internal SDLC flow. External orchestrators should drive work via FSM transitions on the ChangeSet rather than creating tasks directly.
 
 #### `POST /api/tasks`
 
-Queue a task for an agent to pick up.
+Create a task record. All path fields must refer to files that already exist in the worktree.
 
 **Request body:**
 ```json
 {
-  "changeSetId": "chg_000001 (required)",
-  "role": "implementer (required)",
-  "prompt": "Implement the feature as specified (optional)"
-}
-```
-
-**Response:** `201 Created`
-```json
-{
-  "id": "TSK_000001",
   "change_set_id": "chg_000001",
-  "role": "implementer",
-  "status": "queued",
-  "created_at": "2026-05-08T14:00:00.000Z"
+  "title": "Implement rate limiting",
+  "spec_path": ".work/tasks/TSK_000001/spec.md",
+  "acceptance_path": ".work/tasks/TSK_000001/acceptance.md",
+  "plan_path": ".work/tasks/TSK_000001/plan.md",
+  "assigned_agent": "claude-code",
+  "agent_role": "implementer"
 }
 ```
 
-```bash
-curl -s -X POST http://localhost:4000/api/tasks \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d '{
-    "changeSetId": "chg_000001",
-    "role": "implementer"
-  }'
-```
+**Required fields:** `change_set_id`, `title`, `spec_path`, `acceptance_path`
+**Optional:** `plan_path`, `assigned_agent`, `agent_role`
+
+**Response:** `201 Created` — Task record with status `backlog`.
 
 #### `GET /api/tasks/:id`
 
-Poll the status of a task. Use this to check whether an agent has completed work.
-
-**Response:**
-```json
-{
-  "id": "TSK_000001",
-  "change_set_id": "chg_000001",
-  "role": "implementer",
-  "status": "completed",
-  "created_at": "2026-05-08T14:00:00.000Z",
-  "completed_at": "2026-05-08T14:05:00.000Z"
-}
-```
-
-Status values: `queued`, `running`, `completed`, `failed`
+Get a task by ID. Task statuses: `backlog`, `in_progress`, `done`, `blocked`.
 
 ```bash
-# Poll until completed
 curl -s http://localhost:4000/api/tasks/TSK_000001 \
   -H "Authorization: Bearer $API_TOKEN"
 ```
@@ -227,7 +192,7 @@ curl -s http://localhost:4000/api/tasks/TSK_000001 \
 
 ### HITL Approvals
 
-When a FSM transition hits a HITL gate, the response includes an `approvalId`. Use this to approve or reject the gate.
+When a FSM transition hits a HITL gate, the `PATCH /api/change-sets/:id/status` response includes an `approvalId`. Use this to approve or reject the gate.
 
 #### `POST /api/approvals/:approvalId/approve`
 
@@ -261,37 +226,42 @@ curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/reject" \
 
 ---
 
-## Typical OpenClaw skill workflow
+## Typical external orchestrator workflow
 
 ```bash
-# 1. Create a ChangeSet
-CS=$(curl -s -X POST http://localhost:4000/api/change-sets \
+# 1. Create a ChangeSet (auto-generates task ID, branch, worktree path)
+CS=$(curl -s -X POST http://localhost:4000/api/change-sets/quick-create \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"title":"Add feature X","taskId":"TSK_000042","targetBranch":"main"}' \
+  -d '{"title":"Add feature X"}' \
   | jq -r '.id')
 
-# 2. Queue a task
-TASK=$(curl -s -X POST http://localhost:4000/api/tasks \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d "{\"changeSetId\":\"$CS\",\"role\":\"implementer\"}" \
-  | jq -r '.id')
-
-# 3. Poll until completed
-while true; do
-  STATUS=$(curl -s "http://localhost:4000/api/tasks/$TASK" \
-    -H "Authorization: Bearer $API_TOKEN" | jq -r '.status')
-  [ "$STATUS" = "completed" ] && break
-  [ "$STATUS" = "failed" ] && echo "Task failed" && exit 1
-  sleep 5
-done
-
-# 4. Submit for review
+# 2. Advance through FSM states
 curl -s -X PATCH "http://localhost:4000/api/change-sets/$CS/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"trigger":"submit_for_review"}'
+  -d '{"trigger":"plan_accepted"}'
+
+# 3. Poll state until work is complete
+while true; do
+  STATUS=$(curl -s "http://localhost:4000/api/change-sets/$CS" \
+    -H "Authorization: Bearer $API_TOKEN" | jq -r '.status')
+  [ "$STATUS" = "reviewing" ] && break
+  [ "$STATUS" = "abandoned" ] && echo "Abandoned" && exit 1
+  sleep 5
+done
+
+# 4. Trigger approve (HITL gate — returns approvalId)
+APPROVAL_ID=$(curl -s -X PATCH "http://localhost:4000/api/change-sets/$CS/status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -d '{"trigger":"approve"}' | jq -r '.approvalId')
+
+# 5. Approve it
+curl -s -X POST "http://localhost:4000/api/approvals/$APPROVAL_ID/approve" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -d '{"decided_by":"openclaw-skill"}'
 ```
 
 ---
@@ -301,7 +271,7 @@ curl -s -X PATCH "http://localhost:4000/api/change-sets/$CS/status" \
 For real-time updates instead of polling, subscribe to the SSE stream:
 
 ```bash
-curl -s -N http://localhost:4000/api/events \
+curl -s -N http://localhost:4000/events/stream \
   -H "Authorization: Bearer $API_TOKEN"
 ```
 

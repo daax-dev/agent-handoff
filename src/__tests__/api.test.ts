@@ -809,3 +809,71 @@ describe("POST /api/change-sets/from-github-issue writes spec.md (PRD-017)", () 
     expect(cs.spec_content).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Bearer token auth (API_TOKEN)
+// ---------------------------------------------------------------------------
+
+describe("Bearer token auth", () => {
+  const TEST_TOKEN = "test-bearer-secret-99";
+  let authServer: ReturnType<typeof Bun.serve>;
+  let authBase: string;
+
+  beforeAll(() => {
+    process.env.API_TOKEN = TEST_TOKEN;
+    const result = createApiServer({ db, sse, port: 0 });
+    authServer = result.server;
+    authBase = `http://localhost:${authServer.port}`;
+  });
+
+  afterAll(() => {
+    delete process.env.API_TOKEN;
+    authServer.stop(true);
+  });
+
+  test("GET /api/health is always exempt — returns 200 without token", async () => {
+    const res = await fetch(`${authBase}/api/health`);
+    expect(res.status).toBe(200);
+  });
+
+  test("protected route without Authorization header returns 401", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`);
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("Unauthorized");
+  });
+
+  test("protected route with wrong token returns 401", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: "Bearer wrong-token" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("protected route with correct token returns 200", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("UI origin (localhost:5173) is exempt without token", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Origin: "http://localhost:5173" },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("API port origin (localhost:4000) is NOT exempt — requires token", async () => {
+    const res = await fetch(`${authBase}/api/change-sets`, {
+      headers: { Origin: "http://localhost:4000" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("server without API_TOKEN set passes all requests through", async () => {
+    // BASE server was created before API_TOKEN was set — no auth required
+    const res = await fetch(`${BASE}/api/change-sets`);
+    expect(res.status).toBe(200);
+  });
+});
