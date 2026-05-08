@@ -6,6 +6,7 @@ import {
   useDeleteAssignment,
   useCreateAssignment,
 } from "@/hooks/useAgentAssignments";
+import { useAgentSessions } from "@/hooks/useAgentSessions";
 import { TOOL_LABELS, type AgentAssignment, type AgentTool } from "@/types";
 import { AGENT_MODEL_MAP } from "@/lib/agent-model-map";
 import { AssignmentDrawer } from "./AssignmentDrawer";
@@ -317,6 +318,61 @@ function AddAssignmentModal({ existingAssignments, onDone, onClose }: AddModalPr
   );
 }
 
+// ── PoolIndicatorStrip ────────────────────────────────────────────────────────
+// Shows warm (waiting) and busy session counts per tool.
+// Data comes from the existing /api/agent-sessions endpoint polled every 3s.
+
+interface PoolCounts {
+  waiting: number;
+  busy: number;
+}
+
+function PoolIndicatorStrip({ tools }: { tools: AgentTool[] }) {
+  const { data: sessions = [] } = useAgentSessions();
+
+  // Aggregate session counts per tool (only non-disconnected sessions)
+  const counts = new Map<string, PoolCounts>();
+  for (const s of sessions) {
+    if (s.status === "disconnected" || s.status === "done") continue;
+    const c = counts.get(s.tool) ?? { waiting: 0, busy: 0 };
+    if (s.status === "waiting") c.waiting++;
+    if (s.status === "busy")    c.busy++;
+    counts.set(s.tool, c);
+  }
+
+  // Only show tools that appear in the current assignment list
+  const toolsWithSessions = tools.filter((t) => t !== "human" && (counts.get(t)?.waiting ?? 0) + (counts.get(t)?.busy ?? 0) > 0);
+
+  if (toolsWithSessions.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-3 px-4 py-2 border-b bg-muted/10">
+      {toolsWithSessions.map((tool) => {
+        const c = counts.get(tool) ?? { waiting: 0, busy: 0 };
+        return (
+          <span key={tool} className="flex items-center gap-2 text-xs">
+            <span className="font-mono text-muted-foreground">{TOOL_LABELS[tool]}</span>
+            <span
+              title={`${c.waiting} session(s) waiting (warm)`}
+              className="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400"
+            >
+              <span aria-hidden>●</span>
+              {c.waiting} warm
+            </span>
+            <span
+              title={`${c.busy} session(s) busy (running)`}
+              className="inline-flex items-center gap-1 text-muted-foreground"
+            >
+              <span aria-hidden>○</span>
+              {c.busy} busy
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── AgentsTab ─────────────────────────────────────────────────────────────────
 
 export function AgentsTab() {
@@ -379,6 +435,9 @@ export function AgentsTab() {
             </button>
           </div>
         </div>
+
+        {/* Pool warm/cold indicator strip — shows live session counts per tool */}
+        <PoolIndicatorStrip tools={[...new Set<AgentTool>(all.map((a) => a.tool))]} />
 
         {/* Table */}
         <div>
