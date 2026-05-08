@@ -3,7 +3,7 @@
  *
  * This function is called fire-and-forget after a ChangeSet is created.
  * It checks which agent_assignments have auto_launch=1 and, for each,
- * ensures a waiting session exists for that tool.
+ * checks whether a waiting session already exists for that tool (stub: none are spawned yet).
  *
  * NOTE: The current spawnAgent() in spawner.ts is task-bound (requires
  * changeSetId, role, and handoffContent) and spawns a one-shot CLI process
