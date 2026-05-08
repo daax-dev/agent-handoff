@@ -8,6 +8,13 @@ export function dequeue(): string | undefined {
   return queue.shift();
 }
 
+export function dequeueByPredicate(predicate: (jobId: string) => boolean): string | undefined {
+  const idx = queue.findIndex(predicate);
+  if (idx === -1) return undefined;
+  const [jobId] = queue.splice(idx, 1);
+  return jobId;
+}
+
 export function peek(): string | undefined {
   return queue[0];
 }
@@ -21,4 +28,11 @@ export function removeFromQueue(jobId: string): boolean {
   if (idx === -1) return false;
   queue.splice(idx, 1);
   return true;
+}
+
+/**
+ * Test-only helper to reset in-memory queue between test cases.
+ */
+export function clearQueue(): void {
+  queue.length = 0;
 }

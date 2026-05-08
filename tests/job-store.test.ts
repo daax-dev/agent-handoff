@@ -1,7 +1,12 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeEach } from "./test-compat.js";
 import { createJob, getJob, updateJob, listJobs, deleteJob } from "../src/job-store.js";
+import { clearJobs } from "../src/job-store.js";
 
 describe("job-store", () => {
+  beforeEach(() => {
+    clearJobs();
+  });
+
   test("createJob returns job with hnd_ prefix and queued status", () => {
     const job = createJob({
       transport: "cli",

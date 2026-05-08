@@ -1,12 +1,13 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { registerAgent, getRegisteredAgents, getRegisteredAgent, clearCardCache } from "../src/a2a/agent-card.js";
+import { describe, test, expect, beforeEach, mock } from "./test-compat.js";
+import { registerAgent, getRegisteredAgents, getRegisteredAgent, clearCardCache, clearRegisteredAgents } from "../src/a2a/agent-card.js";
 import type { AgentCard } from "../src/a2a/types.js";
+import { sendMessage } from "../src/a2a/client.js";
 
-// Track registered agents across tests - we can't clear registeredAgents directly
-// so tests must account for cumulative state or use unique URLs
+// Reset card cache and registered agents before each test to keep test state isolated.
 describe("A2A Agent Card", () => {
   beforeEach(() => {
     clearCardCache();
+    clearRegisteredAgents();
   });
 
   test("registerAgent and getRegisteredAgents roundtrip", () => {
@@ -63,7 +64,7 @@ describe("A2A Client", () => {
     const originalFetch = globalThis.fetch;
     let capturedBody: any;
 
-    globalThis.fetch = mock(async (url: string | URL | Request, init: any) => {
+    globalThis.fetch = mock(async (_url: string | URL | Request, init: any) => {
       capturedBody = JSON.parse(init.body);
       return new Response(JSON.stringify({
         jsonrpc: "2.0",
@@ -73,7 +74,6 @@ describe("A2A Client", () => {
     }) as any;
 
     try {
-      const { sendMessage } = await import("../src/a2a/client.js");
       const task = await sendMessage("https://agent.example.com", "Do research");
 
       expect(capturedBody.jsonrpc).toBe("2.0");
@@ -102,7 +102,6 @@ describe("A2A Client", () => {
     }) as any;
 
     try {
-      const { sendMessage } = await import("../src/a2a/client.js");
       await sendMessage("https://auth-agent.example.com", "Do work", {
         authHeaders: { Authorization: "Bearer secret_token", "X-Custom": "value" },
       });

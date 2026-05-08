@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "./test-compat.js";
 import { logHandoff, truncatePrompt, logHandoffEvent } from "../src/utils/logger.js";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";

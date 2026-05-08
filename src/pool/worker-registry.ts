@@ -1,4 +1,5 @@
 import type { Worker, WorkerStatus } from "../types.js";
+import { normalizeCapabilities } from "./capabilities.js";
 
 const workers = new Map<string, Worker>();
 
@@ -18,7 +19,7 @@ export function registerWorker(name: string, capabilities: string[] = []): Worke
   const worker: Worker = {
     id: generateWorkerId(),
     name,
-    capabilities,
+    capabilities: normalizeCapabilities(capabilities),
     status: "idle",
     registeredAt: now,
     lastHeartbeatAt: now,
@@ -93,4 +94,11 @@ export function listWorkers(): Worker[] {
     }
   }
   return Array.from(workers.values());
+}
+
+/**
+ * Test-only helper to reset in-memory worker registry between test cases.
+ */
+export function clearWorkers(): void {
+  workers.clear();
 }

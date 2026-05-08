@@ -19,6 +19,7 @@ export function createJob(params: {
   workingDirectory?: string;
   model?: string;
   spawnMode?: "headless" | "tmux";
+  requiredCapabilities?: string[];
   timeoutMs?: number;
   authHeaders?: Record<string, string>;
 }): Job {
@@ -32,6 +33,7 @@ export function createJob(params: {
     workingDirectory: params.workingDirectory,
     model: params.model,
     spawnMode: params.spawnMode,
+    requiredCapabilities: params.requiredCapabilities,
     timeoutMs: params.timeoutMs ?? 300_000,
     createdAt: new Date().toISOString(),
     authHeaders: params.authHeaders,
@@ -57,4 +59,11 @@ export function listJobs(): Job[] {
 
 export function deleteJob(jobId: string): boolean {
   return jobs.delete(jobId);
+}
+
+/**
+ * Test-only helper to reset in-memory state between test cases.
+ */
+export function clearJobs(): void {
+  jobs.clear();
 }
