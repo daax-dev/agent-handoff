@@ -330,7 +330,7 @@ interface PoolCounts {
 function PoolIndicatorStrip({ tools }: { tools: AgentTool[] }) {
   const { data: sessions = [] } = useAgentSessions();
 
-  // Aggregate session counts per tool (only non-disconnected sessions)
+  // Aggregate session counts per tool (active sessions only — excludes disconnected and done)
   const counts = new Map<string, PoolCounts>();
   for (const s of sessions) {
     if (s.status === "disconnected" || s.status === "done") continue;

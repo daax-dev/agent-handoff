@@ -26,7 +26,6 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { findWaitingSession } from "../domain/agent-session.js";
 
 interface AutoLaunchRow {
   tool: string;
@@ -34,9 +33,15 @@ interface AutoLaunchRow {
   fsm_state: string;
 }
 
+interface WaitingSessionRow {
+  tool: string;
+  roles: string;
+}
+
 /**
- * Fire-and-forget: for every assignment with auto_launch=1, ensure a waiting
- * session exists.  Never throws — all errors are caught and logged.
+ * Fire-and-forget: for every assignment with auto_launch=1, checks whether a
+ * waiting session exists for each auto_launch assignment.  Never throws — all
+ * errors are caught and logged.
  */
 export function preWarmSessions(db: Database, _changeSetId: string): void {
   // Deliberately async-free and fire-and-forget
@@ -47,14 +52,26 @@ export function preWarmSessions(db: Database, _changeSetId: string): void {
       )
       .all();
 
+    // Load all waiting sessions once (avoids N+1 per assignment)
+    const waitingSessions = db
+      .query<WaitingSessionRow, []>(
+        "SELECT tool, roles FROM agent_sessions WHERE status = 'waiting'"
+      )
+      .all();
+
     const seen = new Set<string>();
     for (const { tool, role, fsm_state } of assignments) {
       const key = `${tool}/${role}`;
       if (seen.has(key)) continue;
       seen.add(key);
       try {
-        const existing = findWaitingSession(db, tool, role);
-        if (existing) {
+        const hasWaiting = waitingSessions.some((s) => {
+          if (s.tool !== tool) return false;
+          const roles: string[] = s.roles ? JSON.parse(s.roles) : [];
+          return roles.length === 0 || roles.includes(role);
+        });
+
+        if (hasWaiting) {
           // A waiting session is already available — nothing to do
           continue;
         }

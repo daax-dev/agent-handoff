@@ -23,6 +23,10 @@ import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
 import { preWarmSessions } from "../../orchestrator/pre-warm.js";
 
+function schedulePreWarm(db: Database, csId: string): void {
+  setTimeout(() => { preWarmSessions(db, csId); }, 0);
+}
+
 export function changeSetRoutes(
   db: Database,
   sse: SSEBroadcaster,
@@ -50,7 +54,7 @@ export function changeSetRoutes(
       const cs = createChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      setTimeout(() => { preWarmSessions(db, cs.id); }, 0);
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -65,7 +69,7 @@ export function changeSetRoutes(
       const cs = quickCreateChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      setTimeout(() => { preWarmSessions(db, cs.id); }, 0);
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -86,7 +90,7 @@ export function changeSetRoutes(
       }
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
       // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
-      setTimeout(() => { preWarmSessions(db, cs.id); }, 0);
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }

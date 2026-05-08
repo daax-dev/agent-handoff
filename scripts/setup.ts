@@ -71,9 +71,9 @@ try {
   seededMsg = `Agent assignments: ${row?.count ?? 0} defaults`;
 
   // Enable auto_launch for all GSD FSM states used by the UI/FSM
-  // Only apply if no claude-code rows have auto_launch already set to 1 (idempotent guard)
+  // Only apply if no rows of any tool have auto_launch already set to 1 (idempotent guard)
   const alreadySeeded = db.query<{ count: number }, []>(
-    "SELECT COUNT(*) as count FROM agent_assignments WHERE tool = 'claude-code' AND auto_launch = 1"
+    "SELECT COUNT(*) as count FROM agent_assignments WHERE auto_launch = 1"
   ).get();
 
   if (!alreadySeeded || alreadySeeded.count === 0) {
