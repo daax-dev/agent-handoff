@@ -41,6 +41,19 @@ export interface Job {
   handshakeRejectionReason?: string;
   /** SPIFFE ID of the sending agent; stored for future SVID-based verification */
   senderSpiffeId?: string;
+  // Retry / rollback (#6)
+  retryCount?: number;
+  maxRetries?: number;
+  retryExhausted?: boolean;
+  snapshot?: JobSnapshot;
+}
+
+/** Immutable snapshot of a Job's pre-handshake state, used to roll back on retry exhaustion. */
+export interface JobSnapshot {
+  status: JobStatus;
+  handshakeStatus?: "pending" | "accepted" | "rejected";
+  handshakeRejectionReason?: string;
+  error?: string;
 }
 
 export interface A2AArtifactResult {
@@ -208,7 +221,9 @@ export type HandoffEventType =
   | "handshake_proposed"
   | "handshake_accepted"
   | "handshake_rejected"
-  | "handshake_ack_timeout";
+  | "handshake_ack_timeout"
+  // Retry events (#6)
+  | "handshake_retry";
 
 export interface HandoffEvent {
   timestamp: string;

@@ -99,6 +99,27 @@ const MAX_ENCODED_CHARS = Math.ceil(MAX_COMPRESSED_BYTES * 4 / 3) + 4;
 const MAX_UNCOMPRESSED_BYTES = 500 * 1024; // 500 KB — prevent decompression bombs
 
 // ---------------------------------------------------------------------------
+// Canonical serialization
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic JSON serialization with recursively sorted keys.
+ * Ensures the same HandoffContext always produces the same byte sequence,
+ * regardless of the insertion order of object properties.
+ */
+function canonicalStringify(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalStringify).join(",")}]`;
+  if (typeof value !== "object") return JSON.stringify(value);
+  const obj = value as Record<string, unknown>;
+  const entries = Object.keys(obj)
+    .sort()
+    .filter((k) => obj[k] !== undefined) // skip undefined like JSON.stringify
+    .map((k) => `${JSON.stringify(k)}:${canonicalStringify(obj[k])}`);
+  return `{${entries.join(",")}}`;
+}
+
+// ---------------------------------------------------------------------------
 // Serialization
 // ---------------------------------------------------------------------------
 
@@ -111,7 +132,7 @@ export function serializeContext(ctx: HandoffContext): string {
   // Validate first
   HandoffContextSchema.parse(ctx);
 
-  const json = JSON.stringify(ctx);
+  const json = canonicalStringify(ctx);
   const compressed = deflateSync(Buffer.from(json, "utf8"), { level: 9 });
 
   if (compressed.byteLength > MAX_COMPRESSED_BYTES) {
@@ -151,7 +172,11 @@ export function deserializeContext(encoded: string): HandoffContext {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.toLowerCase().includes("maxoutputlength")) {
+    // Node throws either "maxOutputLength exceeded" or "Cannot create a Buffer larger than N bytes"
+    if (
+      message.toLowerCase().includes("maxoutputlength") ||
+      message.toLowerCase().includes("cannot create a buffer larger")
+    ) {
       throw new Error(
         `Uncompressed payload exceeds limit of ${MAX_UNCOMPRESSED_BYTES} bytes`,
       );

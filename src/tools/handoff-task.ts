@@ -1,4 +1,4 @@
-import { createJob, updateJob } from "../job-store.js";
+import { createJob, updateJob, snapshotJob, rollbackJob } from "../job-store.js";
 import { runCliJob, runA2AJob } from "../job-runner.js";
 import { isAgentAvailable } from "../cli/registry.js";
 import { getRegisteredAgent } from "../a2a/agent-card.js";
@@ -11,6 +11,10 @@ import {
   createProposal,
   executeHandshake,
 } from "../a2a/handshake.js";
+import {
+  withHandshakeRetry,
+  DEFAULT_RETRY_POLICY,
+} from "../a2a/retry.js";
 
 export async function handleHandoffTask(args: HandoffTaskInput) {
   if (!args.agent && !args.agentUrl) {
@@ -66,6 +70,9 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
     senderSpiffeId: args.senderSpiffeId,
   });
 
+  // Capture pre-handshake snapshot for rollback (#6)
+  snapshotJob(job.id);
+
   logHandoffEvent({
     timestamp: new Date().toISOString(),
     event: "task_created",
@@ -120,7 +127,26 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const response = await executeHandshake(proposal, receiverCapabilities);
+      const { response, retryCount, retryExhausted } = await withHandshakeRetry(
+        () => executeHandshake(proposal, receiverCapabilities),
+        DEFAULT_RETRY_POLICY,
+        async (retryNumber, delayMs) => {
+          rollbackJob(job.id);
+          updateJob(job.id, { handshakeStatus: "pending", retryCount: retryNumber });
+          logHandoffEvent({
+            timestamp: new Date().toISOString(),
+            event: "handshake_retry",
+            jobId: job.id,
+            transport,
+          });
+          void delayMs; // consumed by withHandshakeRetry
+        },
+      );
+
+      updateJob(job.id, {
+        retryCount,
+        maxRetries: DEFAULT_RETRY_POLICY.maxAttempts - 1,
+      });
 
       if (!response.accepted) {
         updateJob(job.id, {
@@ -128,7 +154,10 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
           handshakeStatus: "rejected",
           handshakeRejectionReason: response.reason,
           completedAt: new Date().toISOString(),
-          error: `Handshake rejected: ${response.reason}${response.detail ? ` — ${response.detail}` : ""}`,
+          retryExhausted,
+          error: retryExhausted
+            ? `Handshake retry exhausted (${retryCount} retries): ${response.reason}`
+            : `Handshake rejected: ${response.reason}${response.detail ? ` — ${response.detail}` : ""}`,
         });
 
         logHandoffEvent({
@@ -149,6 +178,8 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
                 handshakeStatus: "rejected",
                 reason: response.reason,
                 detail: response.detail,
+                retryCount,
+                retryExhausted,
               },
               null,
               2,
