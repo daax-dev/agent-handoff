@@ -70,10 +70,11 @@ export function preWarmSessions(db: Database, _changeSetId: string): void {
         // Until this warm-pool agent process exists, spawnAgent() cannot be reused
         // here because it is one-shot (exits after the task) and task-bound
         // (requires a concrete changeSetId and handoff file up-front).
-        console.log(
-          `[auto-warm] no waiting session for ${tool}/${role} (fsm_state=${fsm_state}) — ` +
-          `would pre-spawn (TODO: requires long-running warm-pool agent process)`
-        );
+        if (process.env.DEBUG_PRE_WARM) {
+          console.log(
+            `[auto-warm] no waiting session for ${tool}/${role} in state ${fsm_state}`
+          );
+        }
       } catch (innerErr) {
         console.error(
           `[auto-warm] error checking session for ${tool}/${role}:`,

@@ -70,7 +70,7 @@ try {
   const row = db.query<{ count: number }, []>("SELECT COUNT(*) as count FROM agent_assignments").get();
   seededMsg = `Agent assignments: ${row?.count ?? 0} defaults`;
 
-  // GSD states seeded by migration 013 — enable auto_launch for claude-code assignments
+  // Enable auto_launch for all GSD FSM states (migration 013 seeds the rows; this enables pre-warm for each)
   // Only apply if no claude-code rows have auto_launch already set to 1 (idempotent guard)
   const alreadySeeded = db.query<{ count: number }, []>(
     "SELECT COUNT(*) as count FROM agent_assignments WHERE tool = 'claude-code' AND auto_launch = 1"
