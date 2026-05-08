@@ -20,7 +20,7 @@ Three integration paths exist today:
 
 See [`docs/rest-api.md`](rest-api.md) for the full API reference with correct trigger names, curl examples, auth setup, and a complete end-to-end workflow.
 
-**Optional: secure the API with a bearer token.** Set `API_TOKEN=your-secret-token` when starting agent-handoff. The skill will send `Authorization: Bearer <token>` on every request. The health endpoint and the Vite UI dev-server origin are always exempt.
+**Optional: secure the API with a bearer token.** Set `API_TOKEN=your-secret-token` when starting agent-handoff. The skill will send `Authorization: Bearer <token>` on every request. The health endpoint is always exempt; Vite UI dev-server origins (ports 5173–5182) are exempt only when the request also originates from a loopback address (127.0.0.1/::1).
 
 **Option B — Use Claude Code as the thin orchestrator layer**: Run Claude Code with agent-handoff registered as an MCP server (`claude mcp add agent-handoff -- bun run <path>/src/index.ts`). Point OpenClaw's automation at the Claude Code session as the decision-maker. OpenClaw triggers intent; Claude Code + agent-handoff do the SDLC coordination.
 
