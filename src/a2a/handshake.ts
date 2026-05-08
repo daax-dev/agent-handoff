@@ -14,7 +14,6 @@
 
 import { z } from "zod";
 import { logHandoffEvent } from "../utils/logger.js";
-import type { HandoffContext } from "../handoff-context.js";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -183,13 +182,14 @@ export function buildRejection(reason: string, detail?: string): HandoffRejectio
 export async function proposeHandoffWithTimeout(
   proposal: HandoffProposal,
   handler: (p: HandoffProposal) => Promise<HandoffResponse>,
+  timeoutMs = ACK_TIMEOUT_MS,
 ): Promise<HandoffResponse> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<HandoffResponse>((_, reject) => {
     timeoutHandle = setTimeout(() => {
       reject(new Error("HANDOFF_ACK_TIMEOUT"));
-    }, ACK_TIMEOUT_MS);
+    }, timeoutMs);
   });
 
   try {
@@ -206,8 +206,7 @@ export async function proposeHandoffWithTimeout(
         timestamp: new Date().toISOString(),
         event: "task_timed_out",
         jobId: proposal.senderJobId,
-        transport: "a2a",
-        error: `Receiver did not acknowledge within ${ACK_TIMEOUT_MS}ms`,
+        error: `Receiver did not acknowledge within ${timeoutMs}ms`,
       });
 
       return buildRejection("ACK_TIMEOUT", `Receiver did not respond within ${ACK_TIMEOUT_MS}ms`);

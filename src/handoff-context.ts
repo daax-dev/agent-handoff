@@ -128,6 +128,11 @@ export function serializeContext(ctx: HandoffContext): string {
  */
 export function deserializeContext(encoded: string): HandoffContext {
   const compressed = Buffer.from(encoded, "base64");
+  if (compressed.byteLength > MAX_COMPRESSED_BYTES) {
+    throw new Error(
+      `Compressed payload ${compressed.byteLength} bytes exceeds limit of ${MAX_COMPRESSED_BYTES} bytes`,
+    );
+  }
   const json = inflateSync(compressed).toString("utf8");
   const raw = JSON.parse(json) as unknown;
   return HandoffContextSchema.parse(raw);

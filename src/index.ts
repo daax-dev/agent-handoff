@@ -43,7 +43,7 @@ server.tool(
     pool: z.boolean().optional().describe("If true, queue the task for worker pool pickup instead of direct spawn"),
     requiredCapabilities: z.array(z.string()).optional().describe("Required capabilities for pool jobs; only allowed when pool is true"),
     contextPayload: z.string().optional().describe("Base64-encoded HandoffContext for multi-session task continuation (serialized via serializeContext())"),
-    senderSpiffeId: z.string().optional().describe("SPIFFE ID of the sending agent; triggers SVID verification when envelope is present"),
+    senderSpiffeId: z.string().optional().describe("SPIFFE ID of the sending agent; recorded in the job for future SVID-based envelope verification (not yet enforced)"),
     dodCriteria: z.array(z.object({
       id: z.string().describe("Machine-readable criterion key, e.g. 'tests_pass'"),
       description: z.string().describe("Human-readable description of the criterion"),

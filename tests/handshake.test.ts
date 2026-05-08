@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "./test-compat.js";
 import {
   evaluateDodCriteria,
   buildAcceptance,
@@ -8,6 +8,7 @@ import {
   proposeHandoffWithTimeout,
   type HandoffProposal,
   type HandoffResponse,
+  type HandoffRejection,
 } from "../src/a2a/handshake.js";
 
 // ---------------------------------------------------------------------------
@@ -192,17 +193,23 @@ describe("proposeHandoffWithTimeout", () => {
     expect(response.accepted).toBe(true);
   });
 
-  test("returns ACK_TIMEOUT rejection when handler is too slow (simulated via internal timeout race)", async () => {
-    // The 30-second module constant can't be overridden in unit tests.
-    // We verify the timeout *path* by simulating what the internal timeout
-    // produces: the ACK_TIMEOUT rejection response is returned when the module
-    // catches its own timeout error internally.  We do this by testing the
-    // `buildRejection("ACK_TIMEOUT", ...)` helper directly, which is what the
-    // module calls after the 30-second race fires.
-    const rej = buildRejection("ACK_TIMEOUT", "Receiver did not respond within 30000ms");
-    expect(rej.accepted).toBe(false);
-    expect(rej.reason).toBe("ACK_TIMEOUT");
-    expect(rej.detail).toContain("30000ms");
+  test("returns ACK_TIMEOUT rejection when handler is too slow", async () => {
+    const proposal = createProposal({
+      senderJobId: "hnd_timeout_test",
+      prompt: "slow task",
+      dodCriteria: [],
+    });
+
+    const slowHandler = async (_p: HandoffProposal): Promise<HandoffResponse> => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return buildAcceptance(_p);
+    };
+
+    // Inject a 50 ms timeout so the test doesn't take 30 seconds
+    const result = await proposeHandoffWithTimeout(proposal, slowHandler, 50);
+    expect(result.accepted).toBe(false);
+    expect((result as HandoffRejection).reason).toBe("ACK_TIMEOUT");
+    expect((result as HandoffRejection).detail).toContain("ms");
   });
 
   test("propagates non-timeout errors from handler", async () => {

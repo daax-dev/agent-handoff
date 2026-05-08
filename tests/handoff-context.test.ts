@@ -1,4 +1,5 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "./test-compat.js";
+import { randomBytes } from "crypto";
 import {
   serializeContext,
   deserializeContext,
@@ -137,8 +138,6 @@ describe("serializeContext / deserializeContext roundtrip", () => {
   test("throws when payload exceeds 50KB", () => {
     // Build a context with many large, hard-to-compress (random-ish) descriptions.
     // Using crypto random hex ensures the deflate output approaches the input size.
-    const { randomBytes } = require("crypto") as typeof import("crypto");
-
     const ctx = createHandoffContext({
       decisions: Array.from({ length: 500 }, () => ({
         description: randomBytes(128).toString("hex"), // 256 unique chars each

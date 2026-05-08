@@ -108,7 +108,7 @@ export async function handleHandoffTask(args: HandoffTaskInput) {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const response = await executeHandshake(proposal, receiverCapabilities, job.id);
+    const response = await executeHandshake(proposal, receiverCapabilities);
 
     if (!response.accepted) {
       updateJob(job.id, {

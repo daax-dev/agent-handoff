@@ -166,8 +166,16 @@ export async function verifyHandoff(
 
   const { payload, senderSpiffeId, issuedAt, svidExpiry, signature } = parsed.data;
 
-  // 2. Expiry check
-  if (Date.now() > new Date(svidExpiry).getTime()) {
+  // 2. Expiry check — treat unparseable timestamps as malformed, not as "not expired"
+  const expiryMs = new Date(svidExpiry).getTime();
+  if (Number.isNaN(expiryMs)) {
+    throw new SvidVerificationError(
+      "SVID_MALFORMED",
+      `svidExpiry is not a valid ISO 8601 timestamp: ${svidExpiry}`,
+      senderSpiffeId,
+    );
+  }
+  if (Date.now() > expiryMs) {
     throw new SvidVerificationError(
       "SVID_EXPIRED",
       `SVID for ${senderSpiffeId} expired at ${svidExpiry}`,
