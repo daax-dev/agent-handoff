@@ -21,6 +21,11 @@ import { PRBodyBuilder } from "../../bridge/pr-body-builder.js";
 import { SpecStore } from "../../spec/store.js";
 import type { SSEBroadcaster } from "../sse.js";
 import { json, notFound, badRequest, err } from "../response.js";
+import { preWarmSessions } from "../../orchestrator/pre-warm.js";
+
+function schedulePreWarm(db: Database, csId: string): void {
+  setTimeout(() => { preWarmSessions(db, csId); }, 0);
+}
 
 export function changeSetRoutes(
   db: Database,
@@ -48,6 +53,8 @@ export function changeSetRoutes(
       }
       const cs = createChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
+      // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -61,6 +68,8 @@ export function changeSetRoutes(
       }
       const cs = quickCreateChangeSet(db, parsed.data);
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
+      // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }
@@ -80,6 +89,8 @@ export function changeSetRoutes(
         } catch { /* non-fatal: spec_content is stored in DB as fallback */ }
       }
       sse.emit({ type: "change_set_created", payload: cs as unknown as Record<string, unknown>, ts: new Date().toISOString() });
+      // Fire-and-forget: pre-warm sessions for auto_launch=1 assignments
+      schedulePreWarm(db, cs.id);
       return json(cs, 201);
     }) as unknown as Response;
   }

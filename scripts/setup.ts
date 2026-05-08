@@ -63,10 +63,29 @@ ok(`Database initialized (${migrationCount} migration${migrationCount !== 1 ? "s
 console.log(`     DB: ${dbPath}`);
 
 // 5. Seed agent_assignments defaults if table exists (added by PRD-020)
+//    Also set auto_launch = 1 for all default GSD claude-code assignments
+//    so that the warm-pool pre-warm logic (Issue #21) is active after setup.
 let seededMsg = "";
 try {
   const row = db.query<{ count: number }, []>("SELECT COUNT(*) as count FROM agent_assignments").get();
   seededMsg = `Agent assignments: ${row?.count ?? 0} defaults`;
+
+  // Enable auto_launch for all GSD FSM states used by the UI/FSM.
+  // Scope the update to the intended claude-code defaults and only change rows
+  // that are still disabled so setup remains idempotent without skipping when
+  // unrelated tools/states already have auto_launch enabled.
+  const result = db.run(
+    "UPDATE agent_assignments SET auto_launch = 1 " +
+    "WHERE tool = 'claude-code' AND auto_launch = 0 AND fsm_state IN " +
+    "('project_init','roadmap_ready','discussing','planning','plan_ready'," +
+    " 'executing','verifying','gap_fixing','shipping','phase_done','milestone_complete','escalated')"
+  );
+
+  if (result.changes > 0) {
+    seededMsg += `, auto_launch=1 on ${result.changes} GSD assignment(s)`;
+  } else {
+    seededMsg += `, claude-code GSD auto_launch already configured`;
+  }
 } catch {
   // PRD-020 not yet applied — skip silently
 }
