@@ -341,6 +341,7 @@ handoff_task({
 |----------|---------|---------|
 | `PORT` | `4000` | Port the REST API listens on |
 | `API_TOKEN` | _(unset)_ | When set, all requests require `Authorization: Bearer <token>`. Health endpoint is always exempt. |
+| `API_TOKEN_ALLOW_UI_ORIGIN_BYPASS` | `0` | Set `"1"` to exempt Vite dev-server origins (ports 5173–5182) from token auth when on loopback. Not for production use behind a reverse proxy. |
 
 ### CLI client env vars
 

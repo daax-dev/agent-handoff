@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
+import path from "path";
 import { Command } from "commander";
 import { configure, ApiError } from "./api-client.js";
 import { initCmd } from "./commands/init.js";
@@ -11,8 +12,10 @@ import { exportCmd } from "./commands/export.js";
 import { importIssueCmd } from "./commands/import-issue.js";
 import { setupCmd } from "./commands/setup.js";
 
+const invokedAs = path.basename(process.argv[1] ?? "agent-handoff").replace(/\.(js|ts)$/, "") || "agent-handoff";
+
 const program = new Command()
-  .name("agent-handoff")
+  .name(invokedAs)
   .description("AI SDLC inner loop — manage ChangeSets from your terminal")
   .version("0.1.0")
   .option("--url <url>", "agent-handoff server URL (overrides AGENT_HANDOFF_URL env var)")

@@ -74,7 +74,7 @@ describe("localsdlc CLI smoke tests", () => {
   test("--help exits 0 and lists all subcommands", () => {
     const result = spawnSync("bun", [CLI, "--help"], { encoding: "utf-8" });
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("agent-handoff");
+    expect(result.stdout).toContain("localsdlc");
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("new");
     expect(result.stdout).toContain("status");
@@ -245,9 +245,9 @@ describe("bin entry (PRD-016 acceptance: agent-handoff works when installed as b
     expect(pkg.bin.localsdlc).toBe("dist/cli/localsdlc.js");
   });
 
-  test("src/cli/localsdlc.ts has #!/usr/bin/env node shebang", () => {
+  test("src/cli/localsdlc.ts has #!/usr/bin/env bun shebang", () => {
     const content = readFileSync(CLI, "utf-8");
-    expect(content.startsWith("#!/usr/bin/env node")).toBe(true);
+    expect(content.startsWith("#!/usr/bin/env bun")).toBe(true);
   });
 });
 
