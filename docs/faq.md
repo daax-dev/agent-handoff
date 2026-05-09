@@ -26,6 +26,26 @@ See [`docs/rest-api.md`](rest-api.md) for the full API reference with correct tr
 
 **Option C — CLI scripting**: Use the agent-handoff CLI directly from shell scripts that OpenClaw invokes. This is lower effort than a full skill plugin but less composable.
 
+```bash
+# Install globally (requires npm/bunx):
+npm install -g @daax-dev/agent-handoff
+# or: bunx @daax-dev/agent-handoff <command>
+
+# Point at your running server:
+export AGENT_HANDOFF_URL=http://localhost:4000
+export AGENT_HANDOFF_TOKEN=your-secret-token   # if auth is enabled
+
+agent-handoff new "add rate limiting"
+agent-handoff list --json          # machine-readable for scripting
+agent-handoff status chg_000001 --json
+agent-handoff review chg_000001
+agent-handoff approve chg_000001
+agent-handoff merge chg_000001
+
+# Inline flags override env vars:
+agent-handoff --url http://remote:4000 --token tok status --json
+```
+
 **Harsh verdict**
 
 The REST API path (Option A) is now documented and has a working skill descriptor. Start with `examples/openclaw-skill/` — it has a complete setup guide and a shell script showing the full implementation → review → HITL approval flow.

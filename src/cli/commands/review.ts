@@ -17,9 +17,10 @@ interface ChangeSet {
   check_runs?: Array<{ name: string; status: string; conclusion?: string }>;
 }
 
-export async function reviewCmd(changeSetId?: string) {
+export async function reviewCmd(changeSetId?: string, opts: { json?: boolean } = {}) {
   if (!changeSetId) {
     const list = await api.get<ChangeSet[]>("/api/change-sets?status=reviewing");
+    if (opts.json) { console.log(JSON.stringify(list)); return; }
     if (list.length === 0) {
       console.log("No ChangeSets currently in review.");
       return;
@@ -31,9 +32,11 @@ export async function reviewCmd(changeSetId?: string) {
   }
 
   const cs = await api.get<ChangeSet>(`/api/change-sets/${changeSetId}`);
+  const comments = await api.get<ReviewComment[]>(`/api/change-sets/${changeSetId}/comments`);
+  if (opts.json) { console.log(JSON.stringify({ ...cs, review_comments: comments })); return; }
+
   console.log(`\nReview: ${cs.id} — ${cs.title}  [${cs.status}]`);
 
-  const comments = await api.get<ReviewComment[]>(`/api/change-sets/${changeSetId}/review-comments`);
   const blocking = comments.filter((c) => c.severity === "blocking");
   const advisory = comments.filter((c) => c.severity !== "blocking");
 

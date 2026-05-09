@@ -1,5 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import path from "path";
 import { Command } from "commander";
+import { configure, ApiError } from "./api-client.js";
 import { initCmd } from "./commands/init.js";
 import { newCmd } from "./commands/new.js";
 import { statusCmd } from "./commands/status.js";
@@ -9,12 +11,19 @@ import { mergeCmd } from "./commands/merge.js";
 import { exportCmd } from "./commands/export.js";
 import { importIssueCmd } from "./commands/import-issue.js";
 import { setupCmd } from "./commands/setup.js";
-import { ApiError } from "./api-client.js";
+
+const invokedAs = path.basename(process.argv[1] ?? "agent-handoff").replace(/\.(js|ts)$/, "") || "agent-handoff";
 
 const program = new Command()
-  .name("localsdlc")
+  .name(invokedAs)
   .description("AI SDLC inner loop — manage ChangeSets from your terminal")
-  .version("0.1.0");
+  .version("0.1.0")
+  .option("--url <url>", "agent-handoff server URL (overrides AGENT_HANDOFF_URL env var)")
+  .option("--token <token>", "Bearer token for auth (overrides AGENT_HANDOFF_TOKEN env var)")
+  .hook("preAction", (thisCommand) => {
+    const { url, token } = thisCommand.opts<{ url?: string; token?: string }>();
+    configure({ url, token });
+  });
 
 program
   .command("init")
@@ -32,15 +41,25 @@ program
 program
   .command("status [changeSetId]")
   .description("List all active ChangeSets, or show detail for one")
-  .action(async (changeSetId?: string) => {
-    await run(() => statusCmd(changeSetId));
+  .option("--json", "Output machine-readable JSON")
+  .action(async (changeSetId: string | undefined, opts: { json?: boolean }) => {
+    await run(() => statusCmd(changeSetId, opts));
+  });
+
+program
+  .command("list")
+  .description("List all active ChangeSets (alias for: status)")
+  .option("--json", "Output machine-readable JSON")
+  .action(async (opts: { json?: boolean }) => {
+    await run(() => statusCmd(undefined, opts));
   });
 
 program
   .command("review [changeSetId]")
   .description("Show review summary (blocking comments + check runs)")
-  .action(async (changeSetId?: string) => {
-    await run(() => reviewCmd(changeSetId));
+  .option("--json", "Output machine-readable JSON")
+  .action(async (changeSetId: string | undefined, opts: { json?: boolean }) => {
+    await run(() => reviewCmd(changeSetId, opts));
   });
 
 program

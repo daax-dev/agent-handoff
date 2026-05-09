@@ -13,9 +13,10 @@ function pad(s: string, n: number) {
   return s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length);
 }
 
-export async function statusCmd(changeSetId?: string) {
+export async function statusCmd(changeSetId?: string, opts: { json?: boolean } = {}) {
   if (changeSetId) {
     const cs = await api.get<ChangeSet & { check_runs?: unknown[] }>(`/api/change-sets/${changeSetId}`);
+    if (opts.json) { console.log(JSON.stringify(cs)); return; }
     console.log(`\nChangeSet: ${cs.id}`);
     console.log(`  Task:    ${cs.task_id}`);
     console.log(`  Title:   ${cs.title}`);
@@ -28,8 +29,9 @@ export async function statusCmd(changeSetId?: string) {
   }
 
   const list = await api.get<ChangeSet[]>("/api/change-sets");
+  if (opts.json) { console.log(JSON.stringify(list)); return; }
   if (list.length === 0) {
-    console.log("No ChangeSets found. Create one with: localsdlc new \"My feature\"");
+    console.log("No ChangeSets found. Create one with: agent-handoff new \"My feature\"");
     return;
   }
 

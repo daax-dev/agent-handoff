@@ -27,13 +27,71 @@ get_result({ jobId: "hnd_a1b2c3d4e5f6" })
 
 ---
 
-## Quick start
+## Installation
+
+### From npm
 
 ```bash
-# Install dependencies
+npm install -g @daax-dev/agent-handoff
+```
+
+This installs two commands:
+- **`agent-handoff-mcp`** — the MCP server entrypoint (register with Claude Code, Cursor, etc.). **Bun is still required at runtime** to run the MCP server/API.
+- **`agent-handoff`** — the CLI client (for scripts, CI, non-MCP orchestrators)
+
+> **Note:** Installing from npm does **not** remove the Bun runtime requirement for the MCP server. The published `agent-handoff-mcp` command runs the Bun-based server, so make sure Bun is installed on the machine where you launch it.
+
+#### MCP server setup
+
+Add to your MCP client config. Pick whichever form matches how you installed:
+
+**After global install** (`npm install -g`, with **Bun installed on the same machine**):
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "agent-handoff-mcp"
+    }
+  }
+}
+```
+
+**Without global install** (npx, always current version):
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "npx",
+      "args": ["--package=@daax-dev/agent-handoff", "-y", "agent-handoff-mcp"]
+    }
+  }
+}
+```
+
+> Full per-client configs (Claude Desktop, Cursor, Windsurf, Zed, VS Code) are in [docs/installation-guide.md](docs/installation-guide.md).
+
+#### CLI client setup
+
+```bash
+# Global install already done above — run from anywhere:
+agent-handoff --help
+
+# Or one-off without installing:
+npx @daax-dev/agent-handoff --help
+```
+
+### From source (development)
+
+```bash
+git clone https://github.com/daax-dev/agent-handoff
 cd agent-handoff && bun install
 
-# Add to your MCP client (e.g. ~/.mcp.json)
+bun run dev:api   # REST API server on :4000
+bun run dev       # MCP server via stdio
+```
+
+MCP config pointing at source (no npm install needed):
+```json
 {
   "mcpServers": {
     "agent-handoff": {
@@ -44,7 +102,36 @@ cd agent-handoff && bun install
 }
 ```
 
-> Full installation instructions for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, and VS Code are in [docs/installation-guide.md](docs/installation-guide.md).
+---
+
+## CLI
+
+For scripts, CI pipelines, and non-MCP orchestrators (OpenClaw, n8n, shell scripts), use the CLI instead of raw HTTP.
+
+```bash
+# Point at your running REST API server
+export AGENT_HANDOFF_URL=http://localhost:4000
+export AGENT_HANDOFF_TOKEN=your-secret-token   # required if server has API_TOKEN set
+
+# Manage ChangeSets
+agent-handoff new "add rate limiting"           # create task + ChangeSet
+agent-handoff list                              # list all active ChangeSets
+agent-handoff status chg_000001                 # detail for one
+agent-handoff review chg_000001                 # blocking comments + check runs
+agent-handoff approve chg_000001
+agent-handoff merge chg_000001
+agent-handoff export chg_000001                 # push branch + open GitHub PR
+
+# Machine-readable output for CI / scripting
+agent-handoff list --json
+agent-handoff status chg_000001 --json
+agent-handoff review chg_000001 --json
+
+# Override server inline — flags take precedence over env vars
+agent-handoff --url http://remote:4000 --token mytoken status --json
+```
+
+See [docs/faq.md](docs/faq.md) for OpenClaw and non-MCP integration examples.
 
 ---
 
@@ -268,13 +355,33 @@ All detected via `PATH`. Use `list_agents` to see what's available on your syste
 
 ## Configuration
 
-All state is in-memory and resets on server restart. No config files.
+All job state is in-memory and resets on server restart. No config files.
 
-| Environment variable | Default | Purpose |
-|---------------------|---------|---------|
-| `RECEIVER_CAPABILITIES` | _(unset)_ | Comma-separated capability IDs for local DoD evaluation. When unset, `dodCriteria` handshakes are accepted locally (remote receiver evaluates). |
-| `HAWKEYE_URL` | _(unset)_ | HTTP endpoint to POST a structured warning when a handshake times out. Best-effort. |
-| `HANDOFF_LOG_PROMPTS` | `false` | Set to `"true"` to include prompt text (≤500 chars) in JSONL logs. Redacted by default. |
+### MCP server env vars
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RECEIVER_CAPABILITIES` | _(unset)_ | Comma-separated capability IDs for local DoD evaluation. When unset, `dodCriteria` handshakes are accepted locally. |
+| `HAWKEYE_URL` | _(unset)_ | HTTP endpoint to POST a warning when a handshake times out. Best-effort. |
+| `HANDOFF_LOG_PROMPTS` | `false` | Set `"true"` to include prompt text (≤500 chars) in JSONL logs. Redacted by default. |
+
+### REST API server env vars
+
+Start the REST API server with `bun run dev:api` (or `bun run src/api/server.ts`):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `4000` | Port the REST API listens on |
+| `API_TOKEN` | _(unset)_ | When set, all API requests require `Authorization: Bearer <token>`. Health endpoint is always exempt. |
+| `API_TOKEN_ALLOW_UI_ORIGIN_BYPASS` | `0` | Set `"1"` to exempt Vite dev-server origins (ports 5173–5182) from token auth when on loopback. |
+
+### CLI client env vars
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AGENT_HANDOFF_URL` | `http://localhost:4000` | REST API server URL. Overridden by `--url` flag. |
+| `AGENT_HANDOFF_TOKEN` | _(unset)_ | Bearer token. Overridden by `--token` flag. |
+| `LOCALSDLC_API_URL` | _(unset)_ | Legacy alias for `AGENT_HANDOFF_URL`. Still recognized. |
 
 **CLI agent auth:** agents inherit the full shell environment — API keys, PATH entries, tool configs — all available automatically.
 
