@@ -37,10 +37,10 @@ export AGENT_HANDOFF_TOKEN=your-secret-token   # if auth is enabled
 
 agent-handoff new "add rate limiting"
 agent-handoff list --json          # machine-readable for scripting
-agent-handoff status CS-000001 --json
-agent-handoff review CS-000001
-agent-handoff approve CS-000001
-agent-handoff merge CS-000001
+agent-handoff status chg_000001 --json
+agent-handoff review chg_000001
+agent-handoff approve chg_000001
+agent-handoff merge chg_000001
 
 # Inline flags override env vars:
 agent-handoff --url http://remote:4000 --token tok status --json

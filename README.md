@@ -36,14 +36,16 @@ npm install -g @daax-dev/agent-handoff
 ```
 
 This installs two commands:
-- **`agent-handoff-mcp`** — the MCP server (register with Claude Code, Cursor, etc.)
+- **`agent-handoff-mcp`** — the MCP server entrypoint (register with Claude Code, Cursor, etc.). **Bun is still required at runtime** to run the MCP server/API.
 - **`agent-handoff`** — the CLI client (for scripts, CI, non-MCP orchestrators)
+
+> **Note:** Installing from npm does **not** remove the Bun runtime requirement for the MCP server. The published `agent-handoff-mcp` command runs the Bun-based server, so make sure Bun is installed on the machine where you launch it.
 
 #### MCP server setup
 
 Add to your MCP client config. Pick whichever form matches how you installed:
 
-**After global install** (`npm install -g`):
+**After global install** (`npm install -g`, with **Bun installed on the same machine**):
 ```json
 {
   "mcpServers": {
@@ -114,16 +116,16 @@ export AGENT_HANDOFF_TOKEN=your-secret-token   # required if server has API_TOKE
 # Manage ChangeSets
 agent-handoff new "add rate limiting"           # create task + ChangeSet
 agent-handoff list                              # list all active ChangeSets
-agent-handoff status CS-000001                  # detail for one
-agent-handoff review CS-000001                  # blocking comments + check runs
-agent-handoff approve CS-000001
-agent-handoff merge CS-000001
-agent-handoff export CS-000001                  # push branch + open GitHub PR
+agent-handoff status chg_000001                 # detail for one
+agent-handoff review chg_000001                 # blocking comments + check runs
+agent-handoff approve chg_000001
+agent-handoff merge chg_000001
+agent-handoff export chg_000001                 # push branch + open GitHub PR
 
 # Machine-readable output for CI / scripting
 agent-handoff list --json
-agent-handoff status CS-000001 --json
-agent-handoff review CS-000001 --json
+agent-handoff status chg_000001 --json
+agent-handoff review chg_000001 --json
 
 # Override server inline — flags take precedence over env vars
 agent-handoff --url http://remote:4000 --token mytoken status --json

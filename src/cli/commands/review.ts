@@ -32,7 +32,7 @@ export async function reviewCmd(changeSetId?: string, opts: { json?: boolean } =
   }
 
   const cs = await api.get<ChangeSet>(`/api/change-sets/${changeSetId}`);
-  const comments = await api.get<ReviewComment[]>(`/api/change-sets/${changeSetId}/review-comments`);
+  const comments = await api.get<ReviewComment[]>(`/api/change-sets/${changeSetId}/comments`);
   if (opts.json) { console.log(JSON.stringify({ ...cs, review_comments: comments })); return; }
 
   console.log(`\nReview: ${cs.id} — ${cs.title}  [${cs.status}]`);
