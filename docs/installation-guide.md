@@ -2,10 +2,10 @@
 
 ## Prerequisites
 
-**Bun** is required to run the MCP server from source. Not needed if you install via npm.
+**Bun is required to run the MCP server** (`agent-handoff-mcp`) regardless of whether you install from npm or source — the server uses Bun-specific APIs (`bun:sqlite`, `Bun.serve`). The CLI client (`agent-handoff`) runs under Node and does not require Bun.
 
 ```bash
-# Install Bun (if not already installed)
+# Install Bun (required for the MCP server on any install path)
 curl -fsSL https://bun.sh/install | bash
 ```
 
@@ -22,8 +22,8 @@ npm install -g @daax-dev/agent-handoff
 ```
 
 Gives you:
-- `agent-handoff-mcp` — the MCP server binary
-- `agent-handoff` / `localsdlc` — the CLI client
+- `agent-handoff-mcp` — the MCP server binary (**requires Bun at runtime**)
+- `agent-handoff` / `localsdlc` — the CLI client (Node only, no Bun needed)
 
 Use `agent-handoff-mcp` as the command in all MCP configs below.
 
