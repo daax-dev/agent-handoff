@@ -60,9 +60,11 @@ Once connected, your AI editor can use these MCP tools:
 **1. See what agents are available on your machine**
 ```
 list_agents
-→ claude: available ✓
-→ codex: not available ✗
-→ gemini: available ✓
+```
+```
+  ✓  claude    available
+  ✗  codex     not found
+  ✓  gemini    available
 ```
 
 **2. Hand off a task**
@@ -72,29 +74,62 @@ handoff_task({
   prompt: "Add input validation to src/routes/signup.ts",
   workingDirectory: "/path/to/your/project"
 })
-→ { jobId: "hnd_a1b2c3d4e5f6", status: "queued" }
+```
+```
+  hnd_a1b2c3d4e5f6   dispatched
 ```
 
 **3. Check on it**
 ```
 check_status({ jobId: "hnd_a1b2c3d4e5f6" })
-→ { status: "running", durationMs: 12400 }
+```
+```
+  hnd_a1b2c3d4e5f6   claude   ● running   12.4s
 ```
 
 **4. Get the result**
 ```
 get_result({ jobId: "hnd_a1b2c3d4e5f6" })
-→ {
-    status: "completed",
-    exitCode: 0,
-    filesChanged: ["src/routes/signup.ts"],
-    diffSummary: "1 file changed, 34 insertions(+), 2 deletions(-)"
-  }
 ```
+```
+  hnd_a1b2c3d4e5f6   claude   ✓ done   exit 0
+  ──────────────────────────────────────────────
+  1 file changed
+  src/routes/signup.ts   +34  −2
+```
+
+**Running multiple tasks at once**
+```
+  Job              Agent     Status          Time    Task
+  ───────────────  ────────  ──────────────  ──────  ──────────────────────────
+  hnd_a1b2c3d4    claude    ● running        12.4s  Add input validation
+  hnd_e5f6g7h8    gemini    ● running         3.1s  Summarize Q4 report
+  hnd_i9j0k1l2    codex     ✓ done            8.2s  Optimize DB queries
+  hnd_m3n4o5p6    claude    ✗ failed          5.0s  Refactor auth layer
+```
+
+> Raw JSON response shapes: [Appendix](#appendix--response-shapes)
 
 ---
 
 ## Three ways to delegate
+
+```
+  Local spawn (default)        A2A remote                  Worker pool
+  ───────────────────────      ─────────────────────────   ────────────────────
+  your AI                      your AI                     your AI
+      │ handoff_task                │ handoff_task               │ handoff_task
+      ▼                            │ agentUrl=…                 │ pool: true
+  agent-handoff                    ▼                             ▼
+      │ fork/exec              agent-handoff               FIFO queue
+      ▼                            │ message/send          ┌────┬────┬────┐
+  claude -p "…"                    ▼ tasks/get             w-1  w-2  w-3
+  codex exec "…"              remote agent                  │   │
+  gemini -p "…"                    │                        └─►pull_task
+      │ stdout + diff               ▼                           │ execute
+      ▼                         result                          ▼
+  result                                                   submit_result
+```
 
 ### Spawn a local agent
 
@@ -140,19 +175,30 @@ handoff_task({
   pool: true,
   requiredCapabilities: ["database"]
 })
-→ { jobId: "hnd_s1t2u3v4w5x6", transport: "pool" }
+```
+```
+  hnd_s1t2u3v4w5x6   queued → pool   capabilities: [database]
 ```
 
 **Worker side:**
 ```
 register_worker({ name: "db-specialist", capabilities: ["typescript", "database"] })
-→ { workerId: "wkr_m3n4o5p6q7r8" }
-
+```
+```
+  wkr_m3n4o5p6q7r8   db-specialist   online   caps: [typescript, database]
+```
+```
 pull_task({ workerId: "wkr_m3n4o5p6q7r8" })
-→ { available: true, jobId: "hnd_s1t2u3v4w5x6", prompt: "Optimize..." }
-
+```
+```
+  hnd_s1t2u3v4w5x6   claimed   Optimize the user-service database queries
+```
+```
 submit_result({ workerId: "wkr_m3n4o5p6q7r8", jobId: "hnd_s1t2u3v4w5x6",
                 status: "completed", output: "Reduced p95 latency by 40%" })
+```
+```
+  hnd_s1t2u3v4w5x6   ✓ done   Reduced p95 latency by 40%
 ```
 
 Workers must heartbeat every 60 seconds (`worker_heartbeat`) or they go offline.
@@ -419,3 +465,62 @@ Test files live in `tests/`. To add a CLI adapter:
 4. Add tests in `tests/cli-adapters.test.ts`
 
 See [docs/faq.md](docs/faq.md) for non-MCP orchestrator examples.
+
+---
+
+## Appendix — Response shapes
+
+Raw JSON returned by each MCP tool, for building integrations or custom clients.
+
+**`list_agents`**
+```json
+[
+  { "name": "claude", "available": true,  "command": "claude" },
+  { "name": "codex",  "available": false, "command": "codex"  },
+  { "name": "gemini", "available": true,  "command": "gemini" }
+]
+```
+
+**`handoff_task`**
+```json
+{ "jobId": "hnd_a1b2c3d4e5f6", "status": "queued", "transport": "cli" }
+```
+
+**`check_status`**
+```json
+{ "jobId": "hnd_a1b2c3d4e5f6", "status": "running", "durationMs": 12400 }
+```
+
+**`get_result`**
+```json
+{
+  "jobId": "hnd_a1b2c3d4e5f6",
+  "status": "completed",
+  "exitCode": 0,
+  "filesChanged": ["src/routes/signup.ts"],
+  "diffSummary": "1 file changed, 34 insertions(+), 2 deletions(-)",
+  "output": "…agent stdout…"
+}
+```
+
+**`register_worker`**
+```json
+{ "workerId": "wkr_m3n4o5p6q7r8", "name": "db-specialist" }
+```
+
+**`pull_task`** (task available)
+```json
+{
+  "available": true,
+  "jobId": "hnd_s1t2u3v4w5x6",
+  "prompt": "Optimize the user-service database queries",
+  "requiredCapabilities": ["database"]
+}
+```
+
+**`pull_task`** (queue empty)
+```json
+{ "available": false }
+```
+
+Job `status` values: `queued` · `running` · `completed` · `failed` · `cancelled`
