@@ -529,7 +529,7 @@ src/
   tools/                11 core tool handlers
   mcp-tools/            ChangeSet and session tool handlers
   utils/                Git helpers + JSONL logger
-tests/                  Vitest tests (130 tests, 0 failing)
+tests/                  Vitest tests
 docs/
   installation-guide.md Full setup for all MCP clients
   cross-machine-and-auth.md Cross-machine limits + auth patterns
