@@ -10,13 +10,19 @@
   "bin": {
     "agent-handoff": "dist/cli/localsdlc.js",
     "localsdlc": "dist/cli/localsdlc.js",
-    "agent-handoff-mcp": "dist/index.js"
+    "agent-handoff-mcp": "dist/index.js",
+    "agent-handoff-server": "dist/api/server.js"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./handoff-context": {
+      "types": "./dist/handoff-context.d.ts",
+      "import": "./dist/handoff-context.js",
+      "default": "./dist/handoff-context.js"
     }
   },
   "files": [
@@ -43,7 +49,7 @@
     "dev:web": "bash scripts/dev-web.sh",
     "dev:api": "bun run src/api/server.ts",
     "dev:ui": "bun --cwd ui run dev",
-    "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js && { printf '#!/usr/bin/env node\\n'; awk 'NR == 1 && /^#!/ { next } { print }' dist/cli/localsdlc.js; } > dist/cli/localsdlc.js.tmp && mv dist/cli/localsdlc.js.tmp dist/cli/localsdlc.js && chmod +x dist/cli/localsdlc.js",
+    "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js && { printf '#!/usr/bin/env node\\n'; awk 'NR == 1 && /^#!/ { next } { print }' dist/cli/localsdlc.js; } > dist/cli/localsdlc.js.tmp && mv dist/cli/localsdlc.js.tmp dist/cli/localsdlc.js && chmod +x dist/cli/localsdlc.js && { printf '#!/usr/bin/env bun\\n'; cat dist/api/server.js; } > dist/api/server.js.tmp && mv dist/api/server.js.tmp dist/api/server.js && chmod +x dist/api/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:bun": "bun run test",

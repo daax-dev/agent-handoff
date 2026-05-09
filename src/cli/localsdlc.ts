@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import path from "path";
 import { Command } from "commander";
 import { configure, ApiError } from "./api-client.js";

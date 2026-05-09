@@ -236,12 +236,13 @@ describe("localsdlc approve — confirmation (PRD-016 acceptance: approve prompt
 // PRD-016: bin entry — package.json + shebang
 // ---------------------------------------------------------------------------
 
-describe("bin entry (PRD-016 acceptance: localsdlc works when installed as bin)", () => {
-  test("package.json bin.localsdlc points to src/cli/localsdlc.ts", () => {
+describe("bin entry (PRD-016 acceptance: agent-handoff works when installed as bin)", () => {
+  test("package.json bin entries for agent-handoff and localsdlc both point to dist/cli/localsdlc.js", () => {
     const pkg = JSON.parse(
       readFileSync(resolve(process.cwd(), "package.json"), "utf-8")
     ) as { bin: Record<string, string> };
-    expect(pkg.bin.localsdlc).toBe("src/cli/localsdlc.ts");
+    expect(pkg.bin["agent-handoff"]).toBe("dist/cli/localsdlc.js");
+    expect(pkg.bin.localsdlc).toBe("dist/cli/localsdlc.js");
   });
 
   test("src/cli/localsdlc.ts has #!/usr/bin/env bun shebang", () => {

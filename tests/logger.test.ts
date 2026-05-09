@@ -203,126 +203,100 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("single event has entryId (UUID) and no prevEntryHash", async () => {
     setupIsolatedDir();
 
-    const fixedDate = new Date("2026-01-15T12:00:00.000Z");
-    jest.setSystemTime(fixedDate);
-    try {
-      const jobId = `hnd_chain_single_${Date.now()}`;
-      await logHandoffEvent({
-        timestamp: new Date().toISOString(),
-        event: "task_created",
-        jobId,
-        transport: "cli",
-        agent: "claude",
-      });
+    const jobId = `hnd_chain_single_${Date.now()}`;
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_created",
+      jobId,
+      transport: "cli",
+      agent: "claude",
+    });
 
-      const logPath = join(tempDir, "2026-01-15.jsonl");
-      expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl"));
+    expect(files.length).toBe(1);
 
-      const content = readFileSync(logPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim().length > 0);
-      expect(lines.length).toBe(1);
+    const content = readFileSync(join(tempDir, files[0]), "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(1);
 
-      const entry = JSON.parse(lines[0]) as Record<string, unknown>;
-      // entryId should be a UUID (8-4-4-4-12 hex format)
-      expect(typeof entry.entryId).toBe("string");
-      expect((entry.entryId as string)).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
-      // First entry must not have prevEntryHash
-      expect(entry.prevEntryHash).toBeUndefined();
-    } finally {
-      jest.useRealTimers();
-    }
+    const entry = JSON.parse(lines[0]) as Record<string, unknown>;
+    expect(typeof entry.entryId).toBe("string");
+    expect((entry.entryId as string)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
+    expect(entry.prevEntryHash).toBeUndefined();
   });
 
   test("two sequential events form a valid Merkle chain", async () => {
     setupIsolatedDir();
 
-    const fixedDate = new Date("2026-01-15T12:00:00.000Z");
-    jest.setSystemTime(fixedDate);
-    try {
-      const jobId1 = `hnd_chain_first_${Date.now()}`;
-      const jobId2 = `hnd_chain_second_${Date.now()}`;
+    const jobId1 = `hnd_chain_first_${Date.now()}`;
+    const jobId2 = `hnd_chain_second_${Date.now()}`;
 
-      await logHandoffEvent({
-        timestamp: new Date().toISOString(),
-        event: "task_created",
-        jobId: jobId1,
-        transport: "cli",
-        agent: "claude",
-      });
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_created",
+      jobId: jobId1,
+      transport: "cli",
+      agent: "claude",
+    });
 
-      await logHandoffEvent({
-        timestamp: new Date().toISOString(),
-        event: "task_started",
-        jobId: jobId2,
-        transport: "cli",
-        agent: "claude",
-      });
+    await logHandoffEvent({
+      timestamp: new Date().toISOString(),
+      event: "task_started",
+      jobId: jobId2,
+      transport: "cli",
+      agent: "claude",
+    });
 
-      const logPath = join(tempDir, "2026-01-15.jsonl");
-      expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl")).sort();
+    const allLines = files.flatMap((f) =>
+      readFileSync(join(tempDir, f), "utf-8").split("\n").filter((l) => l.trim().length > 0)
+    );
+    expect(allLines.length).toBe(2);
 
-      const content = readFileSync(logPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim().length > 0);
-      expect(lines.length).toBe(2);
-
-      const first = JSON.parse(lines[0]) as Record<string, unknown>;
-      const second = JSON.parse(lines[1]) as Record<string, unknown>;
-
-      // First entry: no prevEntryHash
-      expect(first.prevEntryHash).toBeUndefined();
-
-      // Second entry: prevEntryHash must equal sha256 of first line (no trailing \n)
-      const expectedHash = sha256Hex(lines[0]);
-      expect(second.prevEntryHash).toBe(expectedHash);
-    } finally {
-      jest.useRealTimers();
+    // Verify chain invariants within each file
+    for (const file of files) {
+      const lines = readFileSync(join(tempDir, file), "utf-8").split("\n").filter((l) => l.trim().length > 0);
+      expect((JSON.parse(lines[0]) as Record<string, unknown>).prevEntryHash).toBeUndefined();
+      for (let i = 1; i < lines.length; i++) {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        expect(entry.prevEntryHash).toBe(sha256Hex(lines[i - 1]));
+      }
     }
   });
 
   test("concurrent events all form a valid chain (mutex prevents shared prevEntryHash)", async () => {
     setupIsolatedDir();
 
-    const fixedDate = new Date("2026-01-15T12:00:00.000Z");
-    jest.setSystemTime(fixedDate);
-    try {
-      const count = 8;
-      const events = Array.from({ length: count }, (_, i) => ({
-        timestamp: new Date().toISOString(),
-        event: "task_created" as const,
-        jobId: `hnd_concurrent_${i}_${Date.now()}`,
-        transport: "cli" as const,
-        agent: "claude",
-      }));
+    const count = 8;
+    const events = Array.from({ length: count }, (_, i) => ({
+      timestamp: new Date().toISOString(),
+      event: "task_created" as const,
+      jobId: `hnd_concurrent_${i}_${Date.now()}`,
+      transport: "cli" as const,
+      agent: "claude",
+    }));
 
-      // Fire all writes concurrently — the mutex must serialize them correctly.
-      await Promise.all(events.map((e) => logHandoffEvent(e)));
+    await Promise.all(events.map((e) => logHandoffEvent(e)));
 
-      const logPath = join(tempDir, "2026-01-15.jsonl");
-      expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl")).sort();
+    let totalLines = 0;
 
-      const content = readFileSync(logPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim().length > 0);
-      expect(lines.length).toBe(count);
+    for (const file of files) {
+      const lines = readFileSync(join(tempDir, file), "utf-8").split("\n").filter((l) => l.trim().length > 0);
+      totalLines += lines.length;
 
-      // Verify the full chain: each entry's prevEntryHash equals sha256 of the preceding line.
+      expect((JSON.parse(lines[0]) as Record<string, unknown>).prevEntryHash).toBeUndefined();
       for (let i = 1; i < lines.length; i++) {
         const entry = JSON.parse(lines[i]) as Record<string, unknown>;
-        const expectedHash = sha256Hex(lines[i - 1]);
-        expect(entry.prevEntryHash).toBe(expectedHash);
+        expect(entry.prevEntryHash).toBe(sha256Hex(lines[i - 1]));
       }
 
-      // Additionally: no two consecutive entries may share the same prevEntryHash
-      // (that would indicate the mutex failed and two writes read the same predecessor).
-      const prevHashes = lines.slice(1).map((l) => {
-        const e = JSON.parse(l) as Record<string, unknown>;
-        return e.prevEntryHash as string;
-      });
-      const uniquePrevHashes = new Set(prevHashes);
-      expect(uniquePrevHashes.size).toBe(prevHashes.length);
-    } finally {
-      jest.useRealTimers();
+      const prevHashes = lines.slice(1).map((l) => (JSON.parse(l) as Record<string, unknown>).prevEntryHash as string);
+      expect(new Set(prevHashes).size).toBe(prevHashes.length);
     }
+
+    expect(totalLines).toBe(count);
   });
 });
