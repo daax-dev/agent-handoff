@@ -27,25 +27,39 @@ get_result({ jobId: "hnd_a1b2c3d4e5f6" })
 
 ---
 
-## Installation
+## Install
 
-### From npm
+> **Bun required** for the MCP server and REST API server (Bun-native APIs).
+> Install Bun: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 npm install -g @daax-dev/agent-handoff
 ```
 
-This installs two commands:
-- **`agent-handoff-mcp`** — the MCP server entrypoint (register with Claude Code, Cursor, etc.). **Bun is still required at runtime** to run the MCP server/API.
-- **`agent-handoff`** — the CLI client (for scripts, CI, non-MCP orchestrators)
+One install, three commands:
 
-> **Note:** Installing from npm does **not** remove the Bun runtime requirement for the MCP server. The published `agent-handoff-mcp` command runs the Bun-based server, so make sure Bun is installed on the machine where you launch it.
+| Command | What it does | Runtime |
+|---------|-------------|---------|
+| `agent-handoff-mcp` | MCP server — connects to Claude Code, Cursor, etc. | Bun |
+| `agent-handoff-server` | REST API server on `:4000` — backend for the CLI | Bun |
+| `agent-handoff` | CLI client — manage ChangeSets from any terminal | Node |
 
-#### MCP server setup
+---
 
-Add to your MCP client config. Pick whichever form matches how you installed:
+## MCP server setup
 
-**After global install** (`npm install -g`, with **Bun installed on the same machine**):
+### Claude Code
+
+```bash
+claude mcp add agent-handoff -- agent-handoff-mcp
+```
+
+Restart Claude Code. Run `list_agents` to confirm it's connected.
+
+### Cursor / Windsurf / Claude Desktop / Zed
+
+Add to your MCP config file:
+
 ```json
 {
   "mcpServers": {
@@ -56,82 +70,109 @@ Add to your MCP client config. Pick whichever form matches how you installed:
 }
 ```
 
-**Without global install** (npx, always current version):
-```json
-{
-  "mcpServers": {
-    "agent-handoff": {
-      "command": "npx",
-      "args": ["--package=@daax-dev/agent-handoff", "-y", "agent-handoff-mcp"]
-    }
+Config file locations for each client: [docs/installation-guide.md](docs/installation-guide.md)
+
+---
+
+## Getting started
+
+### MCP — hand off your first task
+
+**1. Check what agents are available on your machine**
+```
+list_agents
+→ claude: available ✓
+→ codex: not available ✗
+→ gemini: available ✓
+```
+
+**2. Hand off a task**
+```
+handoff_task({
+  agent: "claude",
+  prompt: "Add input validation to src/routes/signup.ts",
+  workingDirectory: "/path/to/your/project"
+})
+→ { jobId: "hnd_a1b2c3d4e5f6", status: "queued" }
+```
+
+**3. Check status**
+```
+check_status({ jobId: "hnd_a1b2c3d4e5f6" })
+→ { status: "running", durationMs: 12400 }
+```
+
+**4. Get the result**
+```
+get_result({ jobId: "hnd_a1b2c3d4e5f6" })
+→ {
+    status: "completed",
+    exitCode: 0,
+    filesChanged: ["src/routes/signup.ts"],
+    diffSummary: "1 file changed, 34 insertions(+), 2 deletions(-)"
   }
-}
 ```
 
-> Full per-client configs (Claude Desktop, Cursor, Windsurf, Zed, VS Code) are in [docs/installation-guide.md](docs/installation-guide.md).
+### CLI — create and track a ChangeSet
 
-#### CLI client setup
-
+**Terminal 1 — start the REST API server**
 ```bash
-# Global install already done above — run from anywhere:
-agent-handoff --help
-
-# Or one-off without installing:
-npx @daax-dev/agent-handoff --help
+agent-handoff-server
+# → API server listening on http://localhost:4000
 ```
 
-### From source (development)
-
+**Terminal 2 — use the CLI**
 ```bash
-git clone https://github.com/daax-dev/agent-handoff
-cd agent-handoff && bun install
+export AGENT_HANDOFF_URL=http://localhost:4000
+# export AGENT_HANDOFF_TOKEN=mysecret   # only if server was started with API_TOKEN set
 
-bun run dev:api   # REST API server on :4000
-bun run dev       # MCP server via stdio
-```
+agent-handoff new "add rate limiting"
+# → Created task TSK-000001 and ChangeSet chg_000001
 
-MCP config pointing at source (no npm install needed):
-```json
-{
-  "mcpServers": {
-    "agent-handoff": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/agent-handoff/src/index.ts"]
-    }
-  }
-}
+agent-handoff list
+# ID             TASK        STATUS               TITLE
+# chg_000001     TSK-000001  draft                add rate limiting
+
+agent-handoff status chg_000001
+agent-handoff review chg_000001     # blocking comments + check runs
+agent-handoff approve chg_000001
+agent-handoff merge chg_000001      # merge the branch
+# or:
+agent-handoff export chg_000001     # push branch + open GitHub PR
 ```
 
 ---
 
-## CLI
+## CLI reference
 
-For scripts, CI pipelines, and non-MCP orchestrators (OpenClaw, n8n, shell scripts), use the CLI instead of raw HTTP.
+| Command | Description |
+|---------|-------------|
+| `agent-handoff new <title>` | Create a task + ChangeSet, open spec in `$EDITOR` |
+| `agent-handoff list` | List all active ChangeSets |
+| `agent-handoff status [id]` | List all, or detail for one |
+| `agent-handoff review [id]` | Blocking comments + check runs |
+| `agent-handoff approve <id>` | Approve a ChangeSet |
+| `agent-handoff merge <id>` | Merge into target branch |
+| `agent-handoff export <id>` | Push branch + open GitHub PR |
+| `agent-handoff import-issue <url>` | Import a GitHub issue as a task |
+| `agent-handoff setup` | Install agent skills into `.claude/settings.json` |
+
+Global flags (all commands):
 
 ```bash
-# Point at your running REST API server
-export AGENT_HANDOFF_URL=http://localhost:4000
-export AGENT_HANDOFF_TOKEN=your-secret-token   # required if server has API_TOKEN set
-
-# Manage ChangeSets
-agent-handoff new "add rate limiting"           # create task + ChangeSet
-agent-handoff list                              # list all active ChangeSets
-agent-handoff status chg_000001                 # detail for one
-agent-handoff review chg_000001                 # blocking comments + check runs
-agent-handoff approve chg_000001
-agent-handoff merge chg_000001
-agent-handoff export chg_000001                 # push branch + open GitHub PR
-
-# Machine-readable output for CI / scripting
-agent-handoff list --json
-agent-handoff status chg_000001 --json
-agent-handoff review chg_000001 --json
-
-# Override server inline — flags take precedence over env vars
-agent-handoff --url http://remote:4000 --token mytoken status --json
+--url <url>     # REST API server URL (overrides AGENT_HANDOFF_URL)
+--token <token> # Bearer token (overrides AGENT_HANDOFF_TOKEN)
+--json          # Machine-readable JSON output (list, status, review)
 ```
 
-See [docs/faq.md](docs/faq.md) for OpenClaw and non-MCP integration examples.
+JSON output for scripting / CI:
+```bash
+agent-handoff list --json
+agent-handoff status chg_000001 --json
+agent-handoff --url http://remote:4000 --token $TOKEN list --json
+```
+
+See [docs/faq.md](docs/faq.md) for OpenClaw and non-MCP orchestrator examples.
 
 ---
 
