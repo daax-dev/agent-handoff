@@ -18,6 +18,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./handoff-context": {
+      "types": "./dist/handoff-context.d.ts",
+      "import": "./dist/handoff-context.js",
+      "default": "./dist/handoff-context.js"
     }
   },
   "files": [
