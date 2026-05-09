@@ -25,6 +25,14 @@
     "examples",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daax-dev/agent-handoff.git"
+  },
+  "homepage": "https://github.com/daax-dev/agent-handoff#readme",
+  "bugs": {
+    "url": "https://github.com/daax-dev/agent-handoff/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -35,7 +43,7 @@
     "dev:web": "bash scripts/dev-web.sh",
     "dev:api": "bun run src/api/server.ts",
     "dev:ui": "bun --cwd ui run dev",
-    "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js && { printf '#!/usr/bin/env node\\n'; cat dist/cli/localsdlc.js; } > dist/cli/localsdlc.js.tmp && mv dist/cli/localsdlc.js.tmp dist/cli/localsdlc.js && chmod +x dist/cli/localsdlc.js",
+    "build": "tsc && { printf '#!/usr/bin/env bun\\n'; cat dist/index.js; } > dist/index.js.tmp && mv dist/index.js.tmp dist/index.js && chmod +x dist/index.js && { printf '#!/usr/bin/env node\\n'; awk 'NR == 1 && /^#!/ { next } { print }' dist/cli/localsdlc.js; } > dist/cli/localsdlc.js.tmp && mv dist/cli/localsdlc.js.tmp dist/cli/localsdlc.js && chmod +x dist/cli/localsdlc.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:bun": "bun run test",
