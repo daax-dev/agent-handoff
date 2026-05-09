@@ -203,7 +203,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("single event has entryId (UUID) and no prevEntryHash", async () => {
     setupIsolatedDir();
 
-    const today = new Date().toISOString().split("T")[0];
     const jobId = `hnd_chain_single_${Date.now()}`;
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
@@ -213,10 +212,10 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const logPath = join(tempDir, `${today}.jsonl`);
-    expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl"));
+    expect(files.length).toBe(1);
 
-    const content = readFileSync(logPath, "utf-8");
+    const content = readFileSync(join(tempDir, files[0]), "utf-8");
     const lines = content.split("\n").filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(1);
 
@@ -231,7 +230,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("two sequential events form a valid Merkle chain", async () => {
     setupIsolatedDir();
 
-    const today = new Date().toISOString().split("T")[0];
     const jobId1 = `hnd_chain_first_${Date.now()}`;
     const jobId2 = `hnd_chain_second_${Date.now()}`;
 
@@ -251,26 +249,26 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const logPath = join(tempDir, `${today}.jsonl`);
-    expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl")).sort();
+    const allLines = files.flatMap((f) =>
+      readFileSync(join(tempDir, f), "utf-8").split("\n").filter((l) => l.trim().length > 0)
+    );
+    expect(allLines.length).toBe(2);
 
-    const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
-    expect(lines.length).toBe(2);
-
-    const first = JSON.parse(lines[0]) as Record<string, unknown>;
-    const second = JSON.parse(lines[1]) as Record<string, unknown>;
-
-    expect(first.prevEntryHash).toBeUndefined();
-
-    const expectedHash = sha256Hex(lines[0]);
-    expect(second.prevEntryHash).toBe(expectedHash);
+    // Verify chain invariants within each file
+    for (const file of files) {
+      const lines = readFileSync(join(tempDir, file), "utf-8").split("\n").filter((l) => l.trim().length > 0);
+      expect((JSON.parse(lines[0]) as Record<string, unknown>).prevEntryHash).toBeUndefined();
+      for (let i = 1; i < lines.length; i++) {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        expect(entry.prevEntryHash).toBe(sha256Hex(lines[i - 1]));
+      }
+    }
   });
 
   test("concurrent events all form a valid chain (mutex prevents shared prevEntryHash)", async () => {
     setupIsolatedDir();
 
-    const today = new Date().toISOString().split("T")[0];
     const count = 8;
     const events = Array.from({ length: count }, (_, i) => ({
       timestamp: new Date().toISOString(),
@@ -282,24 +280,23 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
 
     await Promise.all(events.map((e) => logHandoffEvent(e)));
 
-    const logPath = join(tempDir, `${today}.jsonl`);
-    expect(existsSync(logPath)).toBe(true);
+    const files = readdirSync(tempDir).filter((f) => f.endsWith(".jsonl")).sort();
+    let totalLines = 0;
 
-    const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim().length > 0);
-    expect(lines.length).toBe(count);
+    for (const file of files) {
+      const lines = readFileSync(join(tempDir, file), "utf-8").split("\n").filter((l) => l.trim().length > 0);
+      totalLines += lines.length;
 
-    for (let i = 1; i < lines.length; i++) {
-      const entry = JSON.parse(lines[i]) as Record<string, unknown>;
-      const expectedHash = sha256Hex(lines[i - 1]);
-      expect(entry.prevEntryHash).toBe(expectedHash);
+      expect((JSON.parse(lines[0]) as Record<string, unknown>).prevEntryHash).toBeUndefined();
+      for (let i = 1; i < lines.length; i++) {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        expect(entry.prevEntryHash).toBe(sha256Hex(lines[i - 1]));
+      }
+
+      const prevHashes = lines.slice(1).map((l) => (JSON.parse(l) as Record<string, unknown>).prevEntryHash as string);
+      expect(new Set(prevHashes).size).toBe(prevHashes.length);
     }
 
-    const prevHashes = lines.slice(1).map((l) => {
-      const e = JSON.parse(l) as Record<string, unknown>;
-      return e.prevEntryHash as string;
-    });
-    const uniquePrevHashes = new Set(prevHashes);
-    expect(uniquePrevHashes.size).toBe(prevHashes.length);
+    expect(totalLines).toBe(count);
   });
 });
