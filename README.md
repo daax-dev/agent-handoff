@@ -2,7 +2,7 @@
 
 **Hand off tasks between AI agents — from any MCP client, to any agent, in three modes.**
 
-Your Claude session shouldn't have to do everything. With agent-handoff, it can spawn a Gemini subprocess to run research, post a task to a remote A2A endpoint, or queue work for a pool of specialized workers — all through the same MCP tools, with full job tracking.
+Your Claude session shouldn't have to do everything. With agent-handoff, it can spawn a local agent subprocess, post a task to a remote A2A endpoint, or queue work for a pool of specialized workers — all through the same MCP tools, with full job tracking.
 
 ```
 handoff_task({ agent: "claude", prompt: "Write integration tests for src/auth.ts" })
