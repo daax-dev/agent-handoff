@@ -203,6 +203,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("single event has entryId (UUID) and no prevEntryHash", async () => {
     setupIsolatedDir();
 
+    const today = new Date().toISOString().split("T")[0];
     const jobId = `hnd_chain_single_${Date.now()}`;
     await logHandoffEvent({
       timestamp: new Date().toISOString(),
@@ -212,7 +213,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const today = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${today}.jsonl`);
     expect(existsSync(logPath)).toBe(true);
 
@@ -231,6 +231,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("two sequential events form a valid Merkle chain", async () => {
     setupIsolatedDir();
 
+    const today = new Date().toISOString().split("T")[0];
     const jobId1 = `hnd_chain_first_${Date.now()}`;
     const jobId2 = `hnd_chain_second_${Date.now()}`;
 
@@ -250,7 +251,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
       agent: "claude",
     });
 
-    const today = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${today}.jsonl`);
     expect(existsSync(logPath)).toBe(true);
 
@@ -270,6 +270,7 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
   test("concurrent events all form a valid chain (mutex prevents shared prevEntryHash)", async () => {
     setupIsolatedDir();
 
+    const today = new Date().toISOString().split("T")[0];
     const count = 8;
     const events = Array.from({ length: count }, (_, i) => ({
       timestamp: new Date().toISOString(),
@@ -281,7 +282,6 @@ describe("logHandoffEvent — Merkle chain (provenance)", () => {
 
     await Promise.all(events.map((e) => logHandoffEvent(e)));
 
-    const today = new Date().toISOString().split("T")[0];
     const logPath = join(tempDir, `${today}.jsonl`);
     expect(existsSync(logPath)).toBe(true);
 
