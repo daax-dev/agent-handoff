@@ -2,32 +2,67 @@
 
 ## Prerequisites
 
+**Bun** is required to run the MCP server from source. Not needed if you install via npm.
+
 ```bash
 # Install Bun (if not already installed)
 curl -fsSL https://bun.sh/install | bash
-
-# Install agent-handoff dependencies
-cd /path/to/agent-handoff
-bun install
 ```
 
-The absolute path to `src/index.ts` is needed for all MCP registrations below. Get it:
+---
+
+## Install method
+
+Choose one:
+
+### A — npm (recommended for most users)
 
 ```bash
+npm install -g @daax-dev/agent-handoff
+```
+
+Gives you:
+- `agent-handoff-mcp` — the MCP server binary
+- `agent-handoff` / `localsdlc` — the CLI client
+
+Use `agent-handoff-mcp` as the command in all MCP configs below.
+
+### B — From source (development / contributors)
+
+```bash
+git clone https://github.com/daax-dev/agent-handoff
+cd agent-handoff && bun install
+```
+
+Use `bun run /absolute/path/to/agent-handoff/src/index.ts` as the command in MCP configs below.
+
+Get your absolute path:
+```bash
 echo "$(pwd)/src/index.ts"
-# e.g., /Users/you/prj/ps/daax/agent-handoff/src/index.ts
+# e.g., /Users/you/agent-handoff/src/index.ts
 ```
 
 ---
 
 ## Installation by Tool
 
+Each section shows both install methods. Use whichever matches how you installed above.
+
 ### Claude Code (CLI)
 
-**Project-level** (recommended — scoped to one project):
+**Project-level** (scoped to one project) — add to `.mcp.json` in your project root:
 
-Add to your project's `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "agent-handoff-mcp"
+    }
+  }
+}
+```
 
+From source:
 ```json
 {
   "mcpServers": {
@@ -39,27 +74,25 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-**Global** (available in all Claude Code sessions):
+**Global** (available in all Claude Code sessions) — add to `~/.claude.json` under `mcpServers` using either form above.
 
-Add to `~/.claude.json` under `mcpServers`:
-
-```json
-{
-  "mcpServers": {
-    "agent-handoff": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/agent-handoff/src/index.ts"]
-    }
-  }
-}
-```
-
-**Verify**: Start Claude Code and run `list_agents` — you should see the 6 CLI agents with availability status.
+**Verify**: Start Claude Code and run `list_agents` — you should see available CLI agents.
 
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows). Restart Claude Desktop after saving.
 
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "agent-handoff-mcp"
+    }
+  }
+}
+```
+
+From source:
 ```json
 {
   "mcpServers": {
@@ -70,13 +103,22 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
   }
 }
 ```
-
-Restart Claude Desktop after editing.
 
 ### Cursor
 
-Add to `.cursor/mcp.json` in your project root:
+Add to `.cursor/mcp.json` in your project root, or configure globally via Cursor Settings → MCP Servers.
 
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "agent-handoff-mcp"
+    }
+  }
+}
+```
+
+From source:
 ```json
 {
   "mcpServers": {
@@ -87,13 +129,22 @@ Add to `.cursor/mcp.json` in your project root:
   }
 }
 ```
-
-Or configure globally via Cursor Settings → MCP Servers.
 
 ### Windsurf
 
 Add to `~/.codeium/windsurf/mcp_config.json`:
 
+```json
+{
+  "mcpServers": {
+    "agent-handoff": {
+      "command": "agent-handoff-mcp"
+    }
+  }
+}
+```
+
+From source:
 ```json
 {
   "mcpServers": {
@@ -114,6 +165,18 @@ Add to `.continue/config.json`:
   "mcpServers": [
     {
       "name": "agent-handoff",
+      "command": "agent-handoff-mcp"
+    }
+  ]
+}
+```
+
+From source:
+```json
+{
+  "mcpServers": [
+    {
+      "name": "agent-handoff",
       "command": "bun",
       "args": ["run", "/absolute/path/to/agent-handoff/src/index.ts"]
     }
@@ -123,8 +186,21 @@ Add to `.continue/config.json`:
 
 ### Zed
 
-Add to Zed settings (`~/.config/zed/settings.json`):
+Add to `~/.config/zed/settings.json`:
 
+```json
+{
+  "context_servers": {
+    "agent-handoff": {
+      "command": {
+        "path": "agent-handoff-mcp"
+      }
+    }
+  }
+}
+```
+
+From source:
 ```json
 {
   "context_servers": {
@@ -140,13 +216,7 @@ Add to Zed settings (`~/.config/zed/settings.json`):
 
 ### Any MCP-Compatible Tool
 
-agent-handoff is a standard stdio MCP server. The launch command is always:
-
-```bash
-bun run /absolute/path/to/agent-handoff/src/index.ts
-```
-
-Register this in whatever MCP configuration your tool supports. The server communicates via stdin/stdout using the MCP JSON-RPC protocol.
+agent-handoff is a standard stdio MCP server. Use `agent-handoff-mcp` (npm install) or `bun run /path/to/src/index.ts` (source) as the command in whatever MCP config your tool supports.
 
 ---
 
