@@ -73,11 +73,15 @@ export const FSMNode = memo(function FSMNode({
         transition: "box-shadow 0.15s, border-color 0.15s",
       }}
     >
-      {/* Invisible handles — all four sides for flexible routing */}
-      <Handle type="target" position={Position.Left}   style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Right}  style={{ opacity: 0 }} />
-      <Handle type="target" position={Position.Top}    style={{ opacity: 0 }} id="top" />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} id="bottom" />
+      {/* All-sides handles — source + target on every side so auto-routing picks the closest */}
+      <Handle type="source" position={Position.Right}  id="right-s"  style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Right}  id="right-t"  style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Left}   id="left-s"   style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Left}   id="left-t"   style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Bottom} id="bottom-s" style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Bottom} id="bottom-t" style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Top}    id="top-s"    style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Top}    id="top-t"    style={{ opacity: 0 }} />
 
       {/* Header */}
       <div
@@ -211,8 +215,14 @@ export const HumanGateNode = memo(function HumanGateNode({ selected }: NodeProps
         fontFamily: "'SF Mono','Fira Code',monospace",
       }}
     >
-      <Handle type="target" position={Position.Left}  style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right}  id="right-s"  style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Right}  id="right-t"  style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Left}   id="left-s"   style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Left}   id="left-t"   style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Bottom} id="bottom-s" style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Bottom} id="bottom-t" style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Top}    id="top-s"    style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Top}    id="top-t"    style={{ opacity: 0 }} />
       <User size={13} color={p.blueBright} />
       Human Approval
     </div>

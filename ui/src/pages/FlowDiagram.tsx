@@ -106,54 +106,91 @@ const CIRCUIT_BREAKER_THRESHOLD = 3;
 
 // ── Edge builder helpers ──────────────────────────────────────────────────────
 
-function handles(from: string, to: string): { sourceHandle?: string; targetHandle?: string } {
+// Changeset-specific override routing (bottom exits/entries for downward edges)
+function specialHandles(from: string, to: string): { sourceHandle?: string; targetHandle?: string } {
   if (
     (from === "reviewing" && (to === "changes_requested" || to === "escalated")) ||
     (from === "approved"  && to === "conflict_detected")
   ) {
-    return { sourceHandle: "bottom" };
+    return { sourceHandle: "bottom-s" };
   }
   if (
     (from === "changes_requested" && to === "implementing") ||
     (from === "conflict_detected" && (to === "implementing" || to === "reviewing"))
   ) {
-    return { targetHandle: "bottom" };
+    return { targetHandle: "bottom-t" };
   }
   return {};
 }
 
+// Auto-pick the closest handle pair based on relative node positions
+function computeHandles(
+  from: string,
+  to: string,
+  layout: Record<string, { x: number; y: number }>,
+  defPos: Record<string, { x: number; y: number }>
+): { sourceHandle: string; targetHandle: string } {
+  const fp = layout[from] ?? defPos[from];
+  const tp = layout[to]   ?? defPos[to];
+  if (!fp || !tp) return { sourceHandle: "right-s", targetHandle: "left-t" };
+
+  const dx = tp.x - fp.x;
+  const dy = tp.y - fp.y;
+
+  // Slight horizontal bias — prefer left/right exits unless clearly vertical
+  if (Math.abs(dx) >= Math.abs(dy) * 0.75) {
+    return dx >= 0
+      ? { sourceHandle: "right-s", targetHandle: "left-t" }
+      : { sourceHandle: "left-s",  targetHandle: "right-t" };
+  }
+  return dy >= 0
+    ? { sourceHandle: "bottom-s", targetHandle: "top-t" }
+    : { sourceHandle: "top-s",    targetHandle: "bottom-t" };
+}
+
 function buildEdges(
   config: WorkflowConfig,
-  selectedId: string | null
+  selectedId: string | null,
+  layout: Record<string, { x: number; y: number }>,
+  defPos: Record<string, { x: number; y: number }>
 ): Edge<FSMEdgeData>[] {
-  const hitl   = new Set(config.hitlGatedTriggers);
+  const hitl      = new Set(config.hitlGatedTriggers);
+  const overrides = config.edgeHandles ?? {};
   const result: Edge<FSMEdgeData>[] = [];
 
   for (const t of config.transitions) {
     if (t.trigger === "abandon") continue;
-    const isHitl = hitl.has(t.trigger);
-    const color  = isHitl ? "#2563eb" : "#d97706";
-    const h      = handles(t.from, t.to);
+    const isHitl  = hitl.has(t.trigger);
+    const color   = isHitl ? "#2563eb" : "#d97706";
+    const edgeId  = `${t.from}--${t.trigger}--${t.to}`;
+    const special = specialHandles(t.from, t.to);
+
+    // Priority: user-dragged handle > special-case routing > auto-computed
+    const h = overrides[edgeId] ??
+      (Object.keys(special).length > 0
+        ? special
+        : computeHandles(t.from, t.to, layout, defPos));
 
     result.push({
-      id: `${t.from}--${t.trigger}--${t.to}`,
+      id: edgeId,
       source: t.from,
       target: t.to,
       ...h,
       type: "fsmEdge",
       markerEnd: { type: MarkerType.ArrowClosed, color },
       data: { trigger: t.trigger, isHitl, isCircuitBreaker: false } as FSMEdgeData,
-      selected: `${t.from}--${t.trigger}--${t.to}` === selectedId,
+      selected: edgeId === selectedId,
     });
   }
 
-  // Changeset-only: hardcoded circuit-breaker edge
+  // Changeset-only: circuit-breaker edge
   if (config.mode !== "gsd") {
+    const cbId = "cb-reviewing-escalated";
     result.push({
-      id: "cb-reviewing-escalated",
+      id: cbId,
       source: "reviewing",
       target: "escalated",
-      sourceHandle: "bottom",
+      ...(overrides[cbId] ?? { sourceHandle: "bottom-s" }),
       type: "fsmEdge",
       markerEnd: { type: MarkerType.ArrowClosed, color: "#b91c1c" },
       data: {
@@ -161,7 +198,7 @@ function buildEdges(
         isHitl: false,
         isCircuitBreaker: true,
       } as FSMEdgeData,
-      selected: "cb-reviewing-escalated" === selectedId,
+      selected: cbId === selectedId,
     });
   }
 
@@ -250,7 +287,12 @@ function FlowDiagramInner() {
   // Build edges whenever config or selection changes
   useEffect(() => {
     if (!localConfig) return;
-    setEdges(buildEdges(localConfig, selectedEdgeId));
+    setEdges(buildEdges(
+      localConfig,
+      selectedEdgeId,
+      localConfig.layout ?? {},
+      defaultPositions(localConfig.mode)
+    ));
   }, [localConfig, selectedEdgeId, setEdges]);
 
   // ── Node drag → save layout ───────────────────────────────────────────────
@@ -274,7 +316,7 @@ function FlowDiagramInner() {
     [onNodesChange, localConfig]
   );
 
-  // ── Edge reconnect → update transition ────────────────────────────────────
+  // ── Edge reconnect → update transition + save handle positions ───────────
   const onReconnect: OnReconnect = useCallback(
     (oldEdge, newConnection) => {
       setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds) as Edge<FSMEdgeData>[]);
@@ -282,26 +324,39 @@ function FlowDiagramInner() {
       const parts = oldEdge.id.split("--");
       if (parts.length !== 3) return;
       const [from, trigger, to] = parts;
-      const updated = {
+      const newSrc = newConnection.source!;
+      const newTgt = newConnection.target!;
+      const newId  = `${newSrc}--${trigger}--${newTgt}`;
+
+      // Save which handle the user dragged to
+      const newEdgeHandles = { ...(localConfig.edgeHandles ?? {}) };
+      delete newEdgeHandles[oldEdge.id];
+      if (newConnection.sourceHandle || newConnection.targetHandle) {
+        newEdgeHandles[newId] = {
+          sourceHandle: newConnection.sourceHandle ?? undefined,
+          targetHandle: newConnection.targetHandle ?? undefined,
+        };
+      }
+
+      setLocalConfig({
         ...localConfig,
         transitions: localConfig.transitions.map((t) =>
           t.from === from && t.trigger === trigger && t.to === to
-            ? { from: newConnection.source!, trigger, to: newConnection.target! }
+            ? { from: newSrc, trigger, to: newTgt }
             : t
         ),
-      };
-      const newId = `${newConnection.source}--${trigger}--${newConnection.target}`;
+        edgeHandles: newEdgeHandles,
+      });
       setEdges((eds) =>
         eds.map((e) => (e.id === oldEdge.id ? { ...e, id: newId } : e))
       );
-      setLocalConfig(updated);
       setIsDirty(true);
       if (selectedEdgeId === oldEdge.id) setSelectedEdgeId(newId);
     },
     [setEdges, localConfig, selectedEdgeId]
   );
 
-  // ── New connection → add transition ───────────────────────────────────────
+  // ── New connection → add transition + save handle positions ──────────────
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
@@ -311,18 +366,28 @@ function FlowDiagramInner() {
         id: newId,
         source: connection.source,
         target: connection.target,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
         type: "fsmEdge",
         markerEnd: { type: MarkerType.ArrowClosed, color: p.amber },
         data: { trigger, isHitl: false, isCircuitBreaker: false },
       };
       setEdges((eds) => addEdge(newEdge, eds) as Edge<FSMEdgeData>[]);
       if (localConfig) {
+        const newEdgeHandles = { ...(localConfig.edgeHandles ?? {}) };
+        if (connection.sourceHandle || connection.targetHandle) {
+          newEdgeHandles[newId] = {
+            sourceHandle: connection.sourceHandle ?? undefined,
+            targetHandle: connection.targetHandle ?? undefined,
+          };
+        }
         setLocalConfig({
           ...localConfig,
           transitions: [
             ...localConfig.transitions,
             { from: connection.source, to: connection.target, trigger },
           ],
+          edgeHandles: newEdgeHandles,
         });
         setIsDirty(true);
       }
@@ -343,6 +408,12 @@ function FlowDiagramInner() {
       let updated = { ...localConfig };
 
       if (updates.trigger && updates.trigger !== oldTrigger) {
+        const newId = `${from}--${newTrigger}--${to}`;
+        const newEdgeHandles = { ...(updated.edgeHandles ?? {}) };
+        if (newEdgeHandles[edgeId]) {
+          newEdgeHandles[newId] = newEdgeHandles[edgeId];
+          delete newEdgeHandles[edgeId];
+        }
         updated = {
           ...updated,
           transitions: updated.transitions.map((t) =>
@@ -353,6 +424,7 @@ function FlowDiagramInner() {
           hitlGatedTriggers: updated.hitlGatedTriggers.map((ht) =>
             ht === oldTrigger ? newTrigger : ht
           ),
+          edgeHandles: newEdgeHandles,
         };
       }
 
@@ -381,11 +453,14 @@ function FlowDiagramInner() {
       const parts = edgeId.split("--");
       if (parts.length !== 3) return;
       const [from, trigger, to] = parts;
+      const newEdgeHandles = { ...(localConfig.edgeHandles ?? {}) };
+      delete newEdgeHandles[edgeId];
       setLocalConfig({
         ...localConfig,
         transitions: localConfig.transitions.filter(
           (t) => !(t.from === from && t.trigger === trigger && t.to === to)
         ),
+        edgeHandles: newEdgeHandles,
       });
       setEdges((eds) => eds.filter((e) => e.id !== edgeId));
       setIsDirty(true);

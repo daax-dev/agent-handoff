@@ -17,6 +17,8 @@ export interface WorkflowConfig {
   layout: Record<string, { x: number; y: number }>;
   /** Custom states added via the diagram editor */
   states?: Record<string, { category: StateCategory }>;
+  /** Per-edge handle overrides saved when user drags an edge endpoint */
+  edgeHandles?: Record<string, { sourceHandle?: string; targetHandle?: string }>;
 }
 
 export type StateCategory = "active" | "success" | "fail" | "escalated";
