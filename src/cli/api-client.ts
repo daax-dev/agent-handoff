@@ -2,8 +2,8 @@ let BASE_URL = (process.env.AGENT_HANDOFF_URL ?? process.env.LOCALSDLC_API_URL ?
 let AUTH_TOKEN: string | undefined = process.env.AGENT_HANDOFF_TOKEN;
 
 export function configure(opts: { url?: string; token?: string }) {
-  if (opts.url) BASE_URL = opts.url.replace(/\/$/, "");
-  if (opts.token) AUTH_TOKEN = opts.token;
+  if (opts.url !== undefined) BASE_URL = opts.url.replace(/\/$/, "");
+  if (opts.token !== undefined) AUTH_TOKEN = opts.token;
 }
 
 export class ApiError extends Error {
