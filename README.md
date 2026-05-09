@@ -48,6 +48,42 @@ cd agent-handoff && bun install
 
 ---
 
+## CLI
+
+For scripts, CI pipelines, and orchestrators that don't speak MCP (OpenClaw, n8n, shell scripts), use the `agent-handoff` CLI instead of raw HTTP.
+
+```bash
+# Global install
+npm install -g @daax-dev/agent-handoff
+# or run without installing
+bunx @daax-dev/agent-handoff <command>
+
+# Configure server location and auth
+export AGENT_HANDOFF_URL=http://localhost:4000
+export AGENT_HANDOFF_TOKEN=your-secret-token   # if API_TOKEN is set on the server
+
+# Commands
+agent-handoff new "add rate limiting"           # create task + ChangeSet
+agent-handoff list                              # list active ChangeSets
+agent-handoff status CS-000001                  # detail for one
+agent-handoff review CS-000001                  # blocking comments + check runs
+agent-handoff approve CS-000001
+agent-handoff merge CS-000001
+agent-handoff export CS-000001                  # push branch + open GitHub PR
+
+# Machine-readable output for scripting / CI
+agent-handoff list --json
+agent-handoff status CS-000001 --json
+agent-handoff review CS-000001 --json
+
+# Override server inline (flags take precedence over env vars)
+agent-handoff --url http://remote:4000 --token tok status --json
+```
+
+See [docs/faq.md](docs/faq.md) for OpenClaw and non-MCP integration examples.
+
+---
+
 ## Usage
 
 ### CLI spawn
