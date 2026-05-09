@@ -4,17 +4,6 @@
 
 Your Claude session shouldn't have to do everything. With agent-handoff, it can spawn a local agent subprocess, post a task to a remote A2A endpoint, or queue work for a pool of specialized workers — all through the same MCP tools, with full job tracking.
 
-```
-handoff_task({ agent: "claude", prompt: "Write integration tests for src/auth.ts" })
-→ { jobId: "hnd_a1b2c3d4e5f6", status: "queued" }
-
-check_status({ jobId: "hnd_a1b2c3d4e5f6" })
-→ { status: "running", durationMs: 18400 }
-
-get_result({ jobId: "hnd_a1b2c3d4e5f6" })
-→ { status: "completed", filesChanged: ["tests/auth.test.ts"], diffSummary: "1 file changed, 87 insertions(+)" }
-```
-
 ---
 
 ## Three ways to delegate
