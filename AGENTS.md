@@ -8,7 +8,7 @@ Entry point for OpenAI Codex and compatible agents.
 
 ## Project
 Name: agent-handoff (`@daax-dev/agent-handoff`)
-Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode, Aider) via CLI spawn or the A2A protocol, backed by an FSM-driven local SDLC orchestrator and a SQLite store.
+Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode) via CLI spawn or the A2A protocol, backed by an FSM-driven local SDLC orchestrator and a SQLite store.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## Project
 Name: agent-handoff (`@daax-dev/agent-handoff`)
-Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation — hand off work between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode, Aider) via CLI spawn or the A2A protocol, with an FSM-driven local SDLC orchestrator.
+Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation — hand off work between AI coding agents (Claude, Codex, Gemini, Copilot, OpenCode) via CLI spawn or the A2A protocol, with an FSM-driven local SDLC orchestrator.
 Goal: A published npm package whose binaries (`agent-handoff-mcp`, `agent-handoff-server`, `agent-handoff`, plus the `localsdlc` alias of `agent-handoff`) let any MCP-compatible editor delegate, track, and review tasks across agents; "done" = typecheck clean, `vitest` green, `bun run build` succeeds, and CI passes on `main`.
 
 ---
