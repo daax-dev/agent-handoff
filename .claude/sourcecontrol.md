@@ -54,7 +54,7 @@
 - Secrets, tokens, keys, connection strings.
 - `.env` / `.env.local` files with live values.
 - Build output (`dist/`), runtime artifacts (`.work/`), logs (`.logs/`), SQLite files (`*.db`, `*.db-wal`, `*.db-shm`), coverage, and packed tarballs (`*.tgz`) — all gitignored.
-- `bun.lock` is gitignored in this repo (CI installs with `--frozen-lockfile`); do not force-add it without operator approval.
+- `bun.lock` is currently gitignored, yet CI installs with `--frozen-lockfile` and no lockfile is committed — a known inconsistency to reconcile separately. Do not force-add the lockfile without operator approval.
 - IDE / OS noise (`.DS_Store`, `Thumbs.db`) — add to `.gitignore`.
 
 ---
@@ -68,4 +68,4 @@
 
 ## Tags and Releases
 - Tag scheme: semver `vX.Y.Z` (existing tags v0.1.4–v0.1.6).
-- Release: publishing a GitHub Release triggers `publish.yml`, which syncs the package version from the tag and publishes to npm via OIDC trusted publishing.
+- Release: publishing a GitHub Release triggers `publish.yml`, which syncs the package version from the tag and runs `npm publish`. The workflow declares `id-token: write` (anticipating OIDC trusted publishing) but currently authenticates with a token (`NODE_AUTH_TOKEN: secrets.NPM_SECRET`), not OIDC.

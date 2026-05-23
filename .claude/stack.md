@@ -32,12 +32,12 @@ Only document what is confirmed and deployable today.
 ## Observability
 - Traces: none.
 - Metrics: none.
-- Logs: JSONL appended per completed handoff to `.logs/tools/handoff-YYYY-MM-DD.jsonl` (`src/utils/logger.ts`). `.logs/` is gitignored.
+- Logs (`src/utils/logger.ts`, all under the gitignored `.logs/`): tool-call logs append to `.logs/tools/handoff-YYYY-MM-DD.jsonl`; handoff-event logs (hash-chained) append under `.logs/handoffs/` by default and honor the `HANDOFF_LOG_DIR` env var.
 
 ## Build / Package
 - TypeScript: `tsc` compiles `src/` → `dist/` (`bun run build`, with shebang fixups for the three binaries). UI builds with `tsc && vite build`.
-- Package manager: Bun. Lockfile `bun.lock` is gitignored in this repo but required by CI (`bun install --frozen-lockfile`).
-- CI: GitHub Actions — `.github/workflows/ci.yml` calls reusable `_build-and-test.yml` (typecheck → test → build) on push/PR to `main`. `publish.yml` publishes to npm on GitHub Release via OIDC trusted publishing.
+- Package manager: Bun. NOTE (known inconsistency to reconcile separately): `bun.lock` is currently gitignored even though CI runs `bun install --frozen-lockfile`, which expects a committed lockfile. No `bun.lock`/`bun.lockb` is checked in today. This is a repo-state issue, not designed behavior — out of scope for the agent-config docs.
+- CI: GitHub Actions — `.github/workflows/ci.yml` calls reusable `_build-and-test.yml` (typecheck → test → build) on push/PR to `main`. `publish.yml` runs on GitHub Release: it declares `id-token: write` (in anticipation of OIDC trusted publishing) but currently publishes via `npm publish` with token auth (`NODE_AUTH_TOKEN: secrets.NPM_SECRET`), not OIDC.
 - Artifact registry: npm (public, `@daax-dev/agent-handoff`).
 
 ## Explicitly Not in Stack

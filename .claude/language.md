@@ -17,11 +17,11 @@ For each active language, this file records:
 ### TypeScript (server, REST API, CLI)
 - Runtime: Bun >= 1.0 (CI pins 1.1.38). Uses Bun-native APIs (`bun:sqlite`); does not run on plain Node.
 - Version: TypeScript 5.9 (pinned `^5.9.3` in devDependencies). ESM only (`"type": "module"`, NodeNext resolution).
-- Package manager: Bun (`bun install`). No npm/yarn/pnpm. `bun.lock` is gitignored here but required by CI (`--frozen-lockfile`); dependency changes are deliberate — call them out in the PR.
+- Package manager: Bun (`bun install`). No npm/yarn/pnpm. NOTE: `bun.lock` is currently gitignored even though CI runs `--frozen-lockfile` (no lockfile is committed today) — a known repo-state inconsistency to reconcile separately, not designed behavior. Dependency changes are deliberate — call them out in the PR.
 - Formatter: none configured. No Prettier/Biome in the repo. Match the surrounding file's style; do not add a formatter without operator approval.
 - Linter: none configured. No ESLint/Biome in the repo.
 - Type checker: `tsc` with `"strict": true` (tsconfig.json). Run `bun run typecheck` (`tsc --noEmit`). `any` requires a justifying comment.
-- Tests: Vitest. Run `bun run test` (→ `vitest run`; root config `vitest.config.ts`, includes `tests/**/*.test.ts`). Bun's native runner is available via `bun run test:bun` for compat checks. Additional suites live under `src/__tests__/`.
+- Tests: Vitest. Run `bun run test` (→ `vitest run`; root config `vitest.config.ts`, includes `tests/**/*.test.ts`). NOTE: `test:bun` is currently just an alias for `bun run test` (still Vitest), not the native runner. To use Bun's native runner directly, invoke `bun test <path>` (e.g. `bun test src/__tests__/api.test.ts`, which is what `test:api` does). Additional suites live under `src/__tests__/`.
 - Coverage threshold: [FILL IN — none enforced today; no coverage tooling or threshold configured in CI]
 
 ### TypeScript / React (web UI — `ui/`)
@@ -30,7 +30,7 @@ For each active language, this file records:
 - Formatter: none configured (no Prettier/Biome in `ui/`).
 - Linter: none configured (no ESLint in `ui/`).
 - Type checker: `tsc` (run `bun --cwd ui run typecheck`). UI build is `tsc && vite build`.
-- Tests: Vitest + Testing Library + happy-dom (`ui/test-setup.ts`).
+- Tests: Bun's native runner (`bun:test`) + `@testing-library/react` + happy-dom (registered via `@happy-dom/global-registrator`). Setup is preloaded through `ui/bunfig.toml` → `ui/test-setup.ts`. There is no `test` script in `ui/package.json` and no Vitest; run UI tests with `bun --cwd ui test`. UI tests are not currently wired into CI.
 - Coverage threshold: [FILL IN — none enforced today]
 
 ### Shell (bash)

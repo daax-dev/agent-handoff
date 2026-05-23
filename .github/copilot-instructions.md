@@ -33,7 +33,7 @@ Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation be
 - Persistence: SQLite via `bun:sqlite` (DB at `.work/agent-handoff.db`, WAL + foreign keys on). Schema is migration-driven (`migrations/*.sql`); tests use an in-memory DB.
 - Validation: Zod schemas. CLI uses `commander`; YAML specs via `js-yaml`.
 - Web UI (`ui/`): React 18 + Vite 6 + TypeScript + Tailwind CSS + `@xyflow/react`.
-- Test framework: Vitest (root, via `bun run test` → `vitest run`); UI uses Vitest + Testing Library + happy-dom.
+- Test framework: Vitest at the root (via `bun run test` → `vitest run`). The UI (`ui/`) uses Bun's native runner (`bun:test`) + `@testing-library/react` + happy-dom (preloaded via `ui/bunfig.toml`); run with `bun --cwd ui test` (no Vitest in `ui/`, and UI tests are not wired into CI).
 - CI: GitHub Actions (`.github/workflows/ci.yml` → `_build-and-test.yml`): typecheck, test, build on push/PR to `main`.
 
 ---
@@ -42,7 +42,7 @@ Purpose: MCP server + REST API + CLI + web UI for cross-agent task delegation be
 - No standalone formatter or linter is configured in this repo (no ESLint/Prettier/Biome). Match the surrounding file's existing style; do not introduce a formatter without operator approval.
 - TypeScript is `strict`. No `any` / untyped code without a justifying comment.
 - All tests must pass (`bun run test`) and `bun run typecheck` must be clean before declaring done.
-- Lockfile (`bun.lock`) is gitignored in source control but required by CI (`bun install --frozen-lockfile`). Treat dependency changes as deliberate — note them in the PR.
+- Lockfile (`bun.lock`) is currently gitignored even though CI runs `bun install --frozen-lockfile` and no lockfile is committed — a known inconsistency to reconcile separately. Treat dependency changes as deliberate — note them in the PR.
 - Never edit files under `dist/` (build output) or hand-edit generated migration artifacts.
 - SQLite schema changes go in a new numbered `migrations/NNN_*.sql` file — never edit an applied migration.
 
@@ -73,5 +73,5 @@ A task is done only when:
 - All tests pass (`bun run test`).
 - `bun run typecheck` passes with no errors; `bun run build` succeeds.
 - PR opened with problem statement, approach, and test evidence.
-- No `[FILL IN]` placeholders left in affected files.
+- No `[FILL IN]` placeholders left in code or PR-affected source files. (Documented gaps in the `.claude/*.md` agent-config docs — explicitly annotated with "none enforced today" — are exempt.)
 - Decisions logged in `.logs/decisions/` if a non-trivial choice was made.
