@@ -44,7 +44,7 @@ Identify the source before starting. If the same task appears in multiple system
 
 ## Definition of Done
 A task is done only when:
-- [ ] All tests pass (`bun run test`). For UI-only changes, also run `bun --cwd ui run test` if present.
+- [ ] All tests pass (`bun run test`). For UI-only changes, also run UI tests via Bun's native runner: `bun --cwd ui test` (no `test` script exists in `ui/package.json`; setup is preloaded via `ui/bunfig.toml`).
 - [ ] `bun run typecheck` passes with no errors and `bun run build` succeeds. (No standalone linter/formatter is configured; match existing file style.)
 - [ ] PR opened with problem statement, approach, and test evidence.
 - [ ] Non-trivial decisions logged in `.logs/decisions/` per `.claude/history.md`.
