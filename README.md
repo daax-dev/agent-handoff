@@ -1,43 +1,61 @@
 # agent-handoff
 
-**Let one AI agent hand work off to another — from your editor, with full job tracking.**
+**Give your AI a team.** Instead of waiting for one agent to finish before starting the next thing, hand tasks off to background workers — Claude, Gemini, Codex — and get results while you keep working.
 
-Your AI coding assistant can only do one thing at a time. agent-handoff changes that: once installed, your AI can spawn Claude, Codex, Gemini, or any other agent as a background worker, hand it a task, and come back with the result. It works through MCP, so any MCP-compatible editor can use it.
+Works with any MCP-compatible editor: Claude Code, Cursor, Windsurf, Zed, Claude Desktop.
+
+---
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    actor You
+    participant Claude as 🤖 Your Claude
+    participant AH as ⚡ agent-handoff
+    participant W as 🔨 Worker agent
+
+    You->>Claude: "add input validation to signup.ts"
+    Claude->>AH: hands off the task
+    AH->>W: spawns a background Claude
+    AH-->>Claude: ✓ handed off
+    Claude-->>You: "On it — working in the background"
+
+    Note over W: Working...
+    W-->>AH: done (changed 2 files)
+
+    You->>Claude: "what happened with that task?"
+    Claude->>AH: checks the result
+    AH-->>Claude: 34 lines added to signup.ts
+    Claude-->>You: shows you the diff
+```
+
+Your main AI never stops. The work happens in the background. You get the result when it's done.
 
 ---
 
 ## Install
 
+> **Requires Bun.** If you don't have it: `curl -fsSL https://bun.sh/install | bash`
+
 ```bash
 npm install -g @daax-dev/agent-handoff
 ```
 
-> **Bun required** for the MCP server and REST API — they use Bun-native APIs.
-> Install Bun: `curl -fsSL https://bun.sh/install | bash`
-
-This gives you three commands:
-
-| Command | What it does |
-|---------|-------------|
-| `agent-handoff-mcp` | MCP server — what your editor connects to |
-| `agent-handoff-server` | REST API backend (needed for the CLI) |
-| `agent-handoff` | CLI for creating and tracking tasks from your terminal |
-
 ---
 
-## Connect to your editor
-
-### Claude Code
+## Connect to Claude Code
 
 ```bash
 claude mcp add agent-handoff -- agent-handoff-mcp
 ```
 
-Restart Claude Code, then run `list_agents` to confirm it's connected and see which agents are available on your machine.
+Restart Claude Code. That's it — Claude can now spawn background agents.
 
-### Cursor, Windsurf, Claude Desktop, Zed
+<details>
+<summary>Other editors (Cursor, Windsurf, Zed, Claude Desktop)</summary>
 
-Add this to your MCP configuration file:
+Add to your MCP config file:
 
 ```json
 {
@@ -49,478 +67,256 @@ Add this to your MCP configuration file:
 }
 ```
 
-Config file locations for each client: [docs/installation-guide.md](docs/installation-guide.md)
+Config file locations: [docs/installation-guide.md](docs/installation-guide.md)
+
+</details>
 
 ---
 
-## Hand off your first task
+## Using it from Claude Code
 
-Once connected, your AI editor can use these MCP tools:
+> **You talk to Claude normally. Claude calls agent-handoff behind the scenes.**
+> You never type `handoff_task(...)` yourself — Claude does that automatically.
 
-**1. See what agents are available on your machine**
-```
-list_agents
-```
-```
-  ✓  claude    available
-  ✗  codex     not found
-  ✓  gemini    available
-```
+### Check what agents are available
 
-**2. Hand off a task**
+Say to Claude:
+> *"What agents do you have available?"*
+
+Claude asks agent-handoff, which checks your PATH and tells you what's installed:
+
 ```
-handoff_task({
-  agent: "claude",
-  prompt: "Add input validation to src/routes/signup.ts",
-  workingDirectory: "/path/to/your/project"
-})
-```
-```
-  hnd_a1b2c3d4e5f6   dispatched
+✓  claude    available
+✗  codex     not found
+✓  gemini    available
 ```
 
-**3. Check on it**
+### Hand off a task
+
+Say to Claude:
+> *"Hand off the input validation work on signup.ts to a background Claude"*
+
+or more naturally:
+> *"Spin up a worker to add rate limiting to the API — I'll keep working while it runs"*
+
+Claude dispatches it. You get a job ID back and can keep going.
+
+### Check on it
+
+Say to Claude:
+> *"How's that background task going?"*
+
 ```
-check_status({ jobId: "hnd_a1b2c3d4e5f6" })
-```
-```
-  hnd_a1b2c3d4e5f6   claude   ● running   12.4s
+● running   18.3s   Add input validation to signup.ts
 ```
 
-**4. Get the result**
+### Get the result
+
+Say to Claude:
+> *"Show me what the worker changed"*
+
 ```
-get_result({ jobId: "hnd_a1b2c3d4e5f6" })
-```
-```
-  hnd_a1b2c3d4e5f6   claude   ✓ done   exit 0
-  ──────────────────────────────────────────────
-  1 file changed
-  src/routes/signup.ts   +34  −2
+✓ done   1 file changed
+src/routes/signup.ts   +34  −2
 ```
 
-**Running multiple tasks at once**
+### Run multiple at once
+
+Say to Claude:
+> *"Spin up three workers: one to add input validation, one to optimize the DB queries, one to add tests for the auth module"*
+
 ```
-  Job              Agent     Status          Time    Task
-  ───────────────  ────────  ──────────────  ──────  ──────────────────────────
-  hnd_a1b2c3d4    claude    ● running        12.4s  Add input validation
-  hnd_e5f6g7h8    gemini    ● running         3.1s  Summarize Q4 report
-  hnd_i9j0k1l2    codex     ✓ done            8.2s  Optimize DB queries
-  hnd_m3n4o5p6    claude    ✗ failed          5.0s  Refactor auth layer
+● running    4.1s   Add input validation
+● running   12.3s   Optimize DB queries
+● running    1.8s   Add tests for auth module
 ```
 
-> Raw JSON response shapes: [Appendix](#appendix--response-shapes)
+All three run in parallel. Claude reports back when each one finishes.
 
 ---
 
 ## Three ways to delegate
 
-```
-  Local spawn (default)        A2A remote                  Worker pool
-  ───────────────────────      ─────────────────────────   ────────────────────
-  your AI                      your AI                     your AI
-      │ handoff_task                │ handoff_task               │ handoff_task
-      ▼                            │ agentUrl=…                 │ pool: true
-  agent-handoff                    ▼                             ▼
-      │ fork/exec              agent-handoff               FIFO queue
-      ▼                            │ message/send          ┌────┬────┬────┐
-  claude -p "…"                    ▼ tasks/get             w-1  w-2  w-3
-  codex exec "…"              remote agent                  │   │
-  gemini -p "…"                    │                        └─►pull_task
-      │ stdout + diff               ▼                           │ execute
-      ▼                         result                          ▼
-  result                                                   submit_result
+```mermaid
+graph TD
+    AH["⚡ agent-handoff"]
+
+    AH --> L["🖥️  Local spawn\nRuns claude / gemini / codex\non your own machine\n\nDefault — works out of the box"]
+    AH --> R["🌐  Remote A2A\nSends the task to any agent\nthat has a URL\n\nGood for specialist agents\non other machines"]
+    AH --> P["🏊  Worker pool\nPosts to a queue.\nRegistered workers pick tasks up.\n\nGood for dynamic teams\nof background agents"]
 ```
 
-### Spawn a local agent
+### Local spawn (default)
 
-The default mode. agent-handoff spawns the agent as a child process and captures its output, exit code, and git diff.
+Works without any extra setup. agent-handoff spawns the agent as a child process and captures its output, exit code, and git diff.
 
-```
-handoff_task({
-  agent: "claude",       // claude | codex | gemini | copilot | opencode
-  prompt: "Refactor src/db/queries.ts to use parameterized queries",
-  workingDirectory: "/path/to/project",
-  model: "opus"          // optional
-})
-```
+Say to Claude:
+> *"Hand this off to a local Claude worker — use the opus model"*
 
-Add `spawnMode: "tmux"` to open a visible tmux window (`daax-<agent>`) so you can watch the agent work in real time.
+Want to watch the agent work in a visible terminal window? Say:
+> *"Hand this off in a tmux window so I can watch"*
 
-### Delegate to a remote A2A agent
-
-Register any [A2A-compliant](https://google.github.io/A2A/) agent by URL, then hand off tasks to it:
-
-```
-register_agent({ url: "https://research-agent.example.com", authToken: "tok_123" })
-
-handoff_task({
-  agentUrl: "https://research-agent.example.com",
-  prompt: "Summarize Q4 trends in cloud compute pricing"
-})
-```
-
-agent-handoff sends `message/send`, polls `tasks/get`, and returns when the task reaches a terminal state.
-
-> Cross-machine setup and authentication: [docs/cross-machine-and-auth.md](docs/cross-machine-and-auth.md)
-
-### Use a worker pool
-
-Post tasks to a FIFO queue; registered workers claim and execute them. Useful when you want multiple agents running in parallel or when worker availability is dynamic.
-
-**Queue a task:**
-```
-handoff_task({
-  agent: "claude",
-  prompt: "Optimize the user-service database queries",
-  pool: true,
-  requiredCapabilities: ["database"]
-})
-```
-```
-  hnd_s1t2u3v4w5x6   queued → pool   capabilities: [database]
-```
-
-**Worker side:**
-```
-register_worker({ name: "db-specialist", capabilities: ["typescript", "database"] })
-```
-```
-  wkr_m3n4o5p6q7r8   db-specialist   online   caps: [typescript, database]
-```
-```
-pull_task({ workerId: "wkr_m3n4o5p6q7r8" })
-```
-```
-  hnd_s1t2u3v4w5x6   claimed   Optimize the user-service database queries
-```
-```
-submit_result({ workerId: "wkr_m3n4o5p6q7r8", jobId: "hnd_s1t2u3v4w5x6",
-                status: "completed", output: "Reduced p95 latency by 40%" })
-```
-```
-  hnd_s1t2u3v4w5x6   ✓ done   Reduced p95 latency by 40%
-```
-
-Workers must heartbeat every 60 seconds (`worker_heartbeat`) or they go offline.
+This opens a `daax-claude` tmux pane and runs the agent there in real time.
 
 ---
 
-## CLI — manage tasks from your terminal
+### Remote A2A
 
-The CLI lets you create and track ChangeSets. A **ChangeSet** is a unit of tracked work: a task spec, a git branch, and a status lifecycle managed by the REST API server.
+Register any agent that speaks the [A2A protocol](https://google.github.io/A2A/) by URL. Once registered, you can hand tasks to it just like a local agent.
 
-**Start the server (Terminal 1):**
-```bash
-agent-handoff-server
-# → API server listening on http://localhost:4000
+Say to Claude:
+> *"Register the research agent at https://research.example.com with token tok_abc"*
+
+Then:
+> *"Hand this summarization task off to the remote research agent"*
+
+Cross-machine setup and authentication: [docs/cross-machine-and-auth.md](docs/cross-machine-and-auth.md)
+
+---
+
+### Worker pool
+
+Post tasks to a queue. Separate worker processes pull tasks and execute them. Useful when you want a fleet of agents running, or when availability is dynamic (workers come and go).
+
+```mermaid
+sequenceDiagram
+    participant Claude as 🤖 Your Claude
+    participant AH as ⚡ agent-handoff
+    participant Q as 📋 Queue
+    participant W1 as Worker 1
+    participant W2 as Worker 2
+
+    Claude->>AH: hand off (pool: true)
+    AH->>Q: queued
+    W1->>Q: pull_task
+    Q-->>W1: claimed
+    W2->>Q: pull_task
+    Q-->>W2: nothing yet
+    Note over W1: Working...
+    W1->>AH: submit_result ✓
+    AH-->>Claude: done
 ```
 
-**Use the CLI (Terminal 2):**
+Workers must send a heartbeat every 60 seconds to stay online.
+
+---
+
+## Managing tasks from your terminal
+
+> **These are terminal commands.** Run them in a shell — not inside Claude Code.
+
+First, start the API server in one terminal:
+
+```bash
+agent-handoff-server
+# listening on http://localhost:4000
+```
+
+Then use the CLI in another terminal:
+
 ```bash
 export AGENT_HANDOFF_URL=http://localhost:4000
 
-agent-handoff new "add rate limiting"       # create a task + ChangeSet
-agent-handoff list                           # list all active ChangeSets
-agent-handoff status chg_000001             # detail for one
-agent-handoff review chg_000001             # check comments + CI status
-agent-handoff approve chg_000001            # approve
-agent-handoff merge chg_000001              # merge the branch
-agent-handoff export chg_000001             # push branch + open GitHub PR
-```
-
-### CLI reference
-
-| Command | Description |
-|---------|-------------|
-| `agent-handoff new <title>` | Create a task + ChangeSet, open spec in `$EDITOR` |
-| `agent-handoff list` | List all active ChangeSets |
-| `agent-handoff status [id]` | List all, or detail for one |
-| `agent-handoff review [id]` | Blocking comments + check runs |
-| `agent-handoff approve <id>` | Approve a ChangeSet |
-| `agent-handoff merge <id>` | Merge into target branch |
-| `agent-handoff export <id>` | Push branch + open GitHub PR |
-| `agent-handoff import-issue <url>` | Import a GitHub issue as a task |
-
-Global flags:
-```bash
---url <url>     # REST API URL (overrides AGENT_HANDOFF_URL)
---token <token> # Bearer token (overrides AGENT_HANDOFF_TOKEN)
---json          # Machine-readable output (list, status, review)
+agent-handoff new "add rate limiting"    # create a new task
+agent-handoff list                        # see all active tasks
+agent-handoff status chg_000001          # detail on one task
+agent-handoff review chg_000001          # check CI + review comments
+agent-handoff approve chg_000001         # approve it
+agent-handoff merge chg_000001           # merge the branch
+agent-handoff export chg_000001          # push branch + open a GitHub PR
+agent-handoff import-issue <github-url>  # pull in a GitHub issue as a task
 ```
 
 ---
 
-## Tools reference
+## Advanced
 
-### Core tools
+### Pass context to the next agent
 
-| Tool | Description |
-|------|-------------|
-| `handoff_task` | Dispatch a task (CLI spawn, A2A, or pool) |
-| `check_status` | Poll job status |
-| `get_result` | Retrieve full output and git diff |
-| `cancel_task` | Kill a running or queued job |
-| `list_agents` | List available CLI agents and registered A2A agents |
-| `register_agent` | Register an A2A endpoint |
-
-### Pool tools
-
-| Tool | Description |
-|------|-------------|
-| `register_worker` | Join the worker pool with optional capabilities |
-| `pull_task` | Claim the next compatible queued task |
-| `submit_result` | Report task outcome back to the pool |
-| `worker_heartbeat` | Keep worker registration alive (60s TTL) |
-| `list_workers` | Show all workers and their current status |
-
-### `handoff_task` parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `agent` | `string` | CLI agent: `claude`, `codex`, `gemini`, `copilot`, `opencode` |
-| `agentUrl` | `string` | A2A endpoint URL (mutually exclusive with `agent`) |
-| `prompt` | `string` | Task description |
-| `workingDirectory` | `string` | Working directory (CLI agents) |
-| `model` | `string` | Model override, e.g. `"opus"`, `"o3"`, `"gemini-2.5-flash"` |
-| `timeoutMs` | `number` | Timeout in ms (default: 300 000) |
-| `spawnMode` | `"headless" \| "tmux"` | CLI spawn mode (default: `"headless"`) |
-| `pool` | `boolean` | Queue for worker pool instead of direct spawn |
-| `requiredCapabilities` | `string[]` | Required capabilities for pool matching |
-| `contextPayload` | `string` | Serialized HandoffContext for task continuation |
-| `dodCriteria` | `object[]` | Definition of Done criteria (two-phase handshake) |
-| `senderSpiffeId` | `string` | Sender SPIFFE ID (stored; not enforced) |
-
-Exactly one of `agent` or `agentUrl` is required.
-
----
-
-## Supported CLI agents
-
-| Agent | Command | Notes |
-|-------|---------|-------|
-| Claude | `claude` | JSON output, supports `--model` |
-| Codex | `codex` | JSONL via stdin |
-| Gemini | `gemini` | JSON output, supports `--model` |
-| Copilot | `copilot` | Plain text output |
-| OpenCode | `opencode` | JSON output, supports `--model` |
-
-All detected via PATH. Use `list_agents` to see what's installed on your system.
-
----
-
-## Advanced features
-
-### Pass state between agents
-
-When handing off a partially complete task, attach a `contextPayload` so the receiving agent knows what was done, what decisions were made, and what comes next.
+If one agent finishes part of a job and you want the next agent to pick up where it left off, include a context payload. It carries what was done, what decisions were made, and what comes next — so the receiving agent isn't starting blind.
 
 ```typescript
 import { createHandoffContext, serializeContext } from "@daax-dev/agent-handoff/handoff-context";
 
-const payload = serializeContext(createHandoffContext({
+const context = serializeContext(createHandoffContext({
   sourceJobId: "hnd_prev123",
-  completed_tasks: [
-    { id: "t-1", title: "Built auth scaffold", completedAt: new Date().toISOString() }
-  ],
-  decisions: [
-    { description: "Use HMAC-SHA256 for signing", rationale: "No SPIFFE lib available",
-      decidedAt: new Date().toISOString() }
-  ],
+  completed_tasks: [{ id: "t-1", title: "Built auth scaffold" }],
+  decisions: [{ description: "Use HMAC-SHA256", rationale: "no SPIFFE lib available" }],
   modified_files: [{ path: "src/auth/spiffe.ts", changeType: "added" }],
-  next_steps: [
-    { order: 1, description: "Write integration tests for signHandoff and verifyHandoff" }
-  ],
-  workingContext: { gitBranch: "feat/spiffe-auth", gitHeadSha: "abc1234" }
+  next_steps: [{ order: 1, description: "Write integration tests" }]
 }));
 
-handoff_task({ agent: "claude", prompt: "Continue from where I left off", contextPayload: payload })
+// Then tell Claude:
+// "Continue the auth work — here's what was done already" (attach context)
 ```
 
-Payloads are deflate-compressed and base64-encoded. Limits: 50 KB compressed, 500 KB uncompressed.
+Payloads are compressed. Limits: 50 KB compressed, 500 KB uncompressed.
 
-### Definition of Done handshake
+### Definition of Done
 
-Require the receiving agent to commit to criteria before the task starts. If a required criterion can't be met, the handoff fails immediately.
+Require the worker to commit to success criteria before the task starts. If it can't meet a required criterion, the handoff fails immediately rather than running to completion and producing something unusable.
 
+Tell Claude:
+> *"Hand this off with DoD: all tests must pass, TypeScript must compile cleanly"*
+
+Under the hood:
 ```
-handoff_task({
-  agent: "claude",
-  prompt: "Add OAuth2 support",
-  dodCriteria: [
-    { id: "tests_pass",   description: "All tests pass after changes", required: true },
-    { id: "type_check",   description: "TypeScript compiles cleanly",  required: true },
-    { id: "docs_updated", description: "API docs updated",             required: false }
-  ]
-})
+dodCriteria: [
+  { description: "All tests pass",           required: true },
+  { description: "TypeScript compiles",      required: true },
+  { description: "API docs updated",         required: false }
+]
 ```
 
-A `CAPABILITY_MISMATCH` rejection means the receiver declared it can't meet a required criterion. `ACK_TIMEOUT` rejections retry automatically with exponential backoff (5 attempts, 100 ms → 800 ms).
-
-### SPIFFE identity
-
-Attach a sender SPIFFE ID for identity tracing. Stored on the job; not yet enforced for access control.
-
-```
-handoff_task({
-  agentUrl: "https://agent.example.com",
-  prompt: "...",
-  senderSpiffeId: "spiffe://trust-domain.example.com/agent/coordinator"
-})
-```
+If the worker rejects a required criterion, you'll know before any work is done.
 
 ---
 
 ## Configuration
 
-### MCP server env vars
+### MCP server
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `RECEIVER_CAPABILITIES` | _(unset)_ | Comma-separated capability IDs for local DoD evaluation. When unset, `dodCriteria` handshakes are accepted locally. |
-| `HAWKEYE_URL` | _(unset)_ | HTTP endpoint to POST a warning when a handshake times out. Best-effort. |
-| `HANDOFF_LOG_PROMPTS` | `false` | Set `"true"` to include prompt text (≤500 chars) in logs. Redacted by default. |
-| `HANDOFF_LOG_DIR` | `.logs/handoffs` | Directory for JSONL event logs. |
+| Variable | Default | What it does |
+|----------|---------|-------------|
+| `HANDOFF_LOG_DIR` | `.logs/handoffs` | Where to write event logs |
+| `HANDOFF_LOG_PROMPTS` | `false` | Set `true` to include prompt text in logs (redacted by default) |
+| `HAWKEYE_URL` | _(unset)_ | Endpoint to notify when a DoD handshake times out |
+| `RECEIVER_CAPABILITIES` | _(unset)_ | Capabilities this server evaluates for DoD locally |
 
-### REST API server env vars
+### REST API server
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PORT` | `4000` | Port the REST API listens on |
-| `API_TOKEN` | _(unset)_ | When set, all requests require `Authorization: Bearer <token>`. Health endpoint is always exempt. |
-| `API_TOKEN_ALLOW_UI_ORIGIN_BYPASS` | `0` | Set `"1"` to exempt Vite dev-server origins (ports 5173–5182) from token auth when on loopback. Not for production use behind a reverse proxy. |
+| Variable | Default | What it does |
+|----------|---------|-------------|
+| `PORT` | `4000` | Port to listen on |
+| `API_TOKEN` | _(unset)_ | Require `Authorization: Bearer <token>` on all requests |
 
-### CLI client env vars
+### CLI
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `AGENT_HANDOFF_URL` | `http://localhost:4000` | REST API URL. Overridden by `--url`. |
-| `AGENT_HANDOFF_TOKEN` | _(unset)_ | Bearer token. Overridden by `--token`. |
-
----
-
-## Logging
-
-Handoff events are logged to `.logs/handoffs/YYYY-MM-DD.jsonl` (overrideable with `HANDOFF_LOG_DIR`):
-
-```json
-{
-  "timestamp": "2026-02-14T12:34:56.789Z",
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "event": "task_created",
-  "transport": "cli",
-  "agent": "claude"
-}
-```
-
-Set `HANDOFF_LOG_PROMPTS=true` to include the prompt text in log entries (truncated to 500 characters).
-
----
-
-## Architecture
-
-```
-MCP client (Claude Code, Cursor…)
-       │ stdio
-agent-handoff MCP server
-  ├── handoff_task ──► CLI Runner (headless / tmux)
-  │                       ├── claude -p …
-  │                       ├── codex exec …
-  │                       └── gemini -p …
-  ├── handoff_task ──► A2A Client (JSON-RPC over HTTP)
-  │                       └── message/send → tasks/get → tasks/cancel
-  ├── handoff_task ──► Worker Pool (FIFO queue)
-  │    pull_task ◄──       └── workers pull, execute, submit
-  │
-  └── Job Store (in-memory Map, hnd_* IDs)
-       ├── snapshot / rollback (DoD retry safety)
-       └── JSONL logger (.logs/handoffs/)
-```
-
-All job state is in-memory and resets on server restart.
-
-| Module | Role |
-|--------|------|
-| `src/job-store.ts` | In-memory job store with snapshot/rollback for retry safety |
-| `src/handoff-context.ts` | HandoffContext schema, canonical serialization, deflate codec |
-| `src/a2a/handshake.ts` | Two-phase DoD handshake, 30s timeout, Hawkeye escalation |
-| `src/a2a/retry.ts` | Exponential backoff retry (ACK_TIMEOUT only, 5 attempts max) |
-| `src/auth/spiffe.ts` | HMAC-SHA256 envelope signing and verification |
-| `src/cli/` | Per-agent adapters + tmux spawner |
-| `src/pool/` | FIFO job queue + worker registry with heartbeat liveness |
-| `src/utils/logger.ts` | JSONL event logger (prompts redacted by default) |
+| Variable | Default | What it does |
+|----------|---------|-------------|
+| `AGENT_HANDOFF_URL` | `http://localhost:4000` | REST API URL |
+| `AGENT_HANDOFF_TOKEN` | _(unset)_ | Bearer token for the API |
 
 ---
 
 ## Development
 
 ```bash
-bun run test       # run all tests (vitest)
-bun run typecheck  # tsc --noEmit
+bun run test       # run all tests
+bun run typecheck  # TypeScript check
 ```
 
-Test files live in `tests/`. To add a CLI adapter:
-1. Create `src/cli/<name>.ts` extending `BaseAdapter` — implement `buildArgs()` and `parseOutput()`
-2. Add the agent name to `AgentName` in `src/types.ts`
-3. Register in `src/cli/registry.ts`
-4. Add tests in `tests/cli-adapters.test.ts`
+To add a new CLI agent: create `src/cli/<name>.ts` extending `BaseAdapter`, add it to `AgentName` in `src/types.ts`, register in `src/cli/registry.ts`, add tests in `tests/cli-adapters.test.ts`.
 
-See [docs/faq.md](docs/faq.md) for non-MCP orchestrator examples.
+Full MCP tool reference and response shapes: [docs/rest-api.md](docs/rest-api.md)
 
 ---
 
-## Appendix — Response shapes
+## Docs
 
-Raw JSON returned by each MCP tool, for building integrations or custom clients.
-
-**`list_agents`**
-```json
-[
-  { "name": "claude", "available": true,  "command": "claude" },
-  { "name": "codex",  "available": false, "command": "codex"  },
-  { "name": "gemini", "available": true,  "command": "gemini" }
-]
-```
-
-**`handoff_task`**
-```json
-{ "jobId": "hnd_a1b2c3d4e5f6", "status": "queued", "transport": "cli" }
-```
-
-**`check_status`**
-```json
-{ "jobId": "hnd_a1b2c3d4e5f6", "status": "running", "durationMs": 12400 }
-```
-
-**`get_result`**
-```json
-{
-  "jobId": "hnd_a1b2c3d4e5f6",
-  "status": "completed",
-  "exitCode": 0,
-  "filesChanged": ["src/routes/signup.ts"],
-  "diffSummary": "1 file changed, 34 insertions(+), 2 deletions(-)",
-  "output": "…agent stdout…"
-}
-```
-
-**`register_worker`**
-```json
-{ "workerId": "wkr_m3n4o5p6q7r8", "name": "db-specialist" }
-```
-
-**`pull_task`** (task available)
-```json
-{
-  "available": true,
-  "jobId": "hnd_s1t2u3v4w5x6",
-  "prompt": "Optimize the user-service database queries",
-  "requiredCapabilities": ["database"]
-}
-```
-
-**`pull_task`** (queue empty)
-```json
-{ "available": false }
-```
-
-Job `status` values: `queued` · `running` · `completed` · `failed` · `cancelled`
+| | |
+|---|---|
+| [Installation guide](docs/installation-guide.md) | Editor config file locations |
+| [Cross-machine & auth](docs/cross-machine-and-auth.md) | Remote A2A setup, tokens |
+| [REST API reference](docs/rest-api.md) | All endpoints and response shapes |
+| [FAQ](docs/faq.md) | Non-MCP usage, common issues |
