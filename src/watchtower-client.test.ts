@@ -84,18 +84,24 @@ function startMockServer(): {
 }
 
 /**
- * Allocate an ephemeral port by starting and immediately stopping a server.
- * Returns a port number that is guaranteed to be closed (not listening).
+ * Start a server that rejects every WebSocket upgrade with HTTP 400.
+ * The connecting client will receive an onerror/onclose event, exercising
+ * the WS client's failure path deterministically regardless of what else is
+ * running on the machine.
  */
-async function getClosedPort(): Promise<number> {
+function startRejectingServer(): { port: number; stop: () => void } {
   const server = Bun.serve({
     port: 0,
-    fetch() { return new Response("noop"); },
+    fetch() {
+      // Never upgrade: return a plain HTTP 400.
+      return new Response("upgrade rejected", { status: 400 });
+    },
     websocket: { message() {}, open() {}, close() {} },
   });
-  const port = server.port as number;
-  await server.stop(true);
-  return port;
+  return {
+    port: server.port as number,
+    stop: () => server.stop(true),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -267,24 +273,29 @@ describe("pushPromptTokens — default off", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Connect failure: closed port → resolves without throwing
+// 3. Connection rejected: server returns HTTP 400 (no WS upgrade)
 // ---------------------------------------------------------------------------
-describe("pushPromptTokens — connect failure", () => {
-  test("resolves without throwing when the target port is known to be closed", async () => {
+describe("pushPromptTokens — connection rejected", () => {
+  test("resolves without throwing when the server rejects the WS upgrade", async () => {
     savedUrl = process.env.WATCHTOWER_URL;
-    // Obtain a port that was listening but has since been stopped; guaranteed
-    // to be closed (not occupied) at the time of this test.
-    const closedPort = await getClosedPort();
-    process.env.WATCHTOWER_URL = `ws://localhost:${closedPort}`;
+    // Use a server that deterministically rejects the WS upgrade with HTTP 400.
+    // This guarantees the client hits its onerror/onclose path regardless of
+    // what else is running on the machine.
+    const { port, stop } = startRejectingServer();
+    process.env.WATCHTOWER_URL = `ws://localhost:${port}`;
 
-    await expect(
-      pushPromptTokens({
-        sessionId: "job-refused",
-        sequence: 1,
-        prompt: "will fail",
-        inputTokens: 5,
-        outputTokens: 2,
-      })
-    ).resolves.toBeUndefined();
+    try {
+      await expect(
+        pushPromptTokens({
+          sessionId: "job-rejected",
+          sequence: 1,
+          prompt: "will fail",
+          inputTokens: 5,
+          outputTokens: 2,
+        })
+      ).resolves.toBeUndefined();
+    } finally {
+      stop();
+    }
   });
 });
