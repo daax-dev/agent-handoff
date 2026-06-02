@@ -6,17 +6,18 @@
  * attempted and the function is a no-op. Errors are caught and logged to stderr;
  * they NEVER propagate to the caller. This must not delay or fail a job.
  *
- * Protocol (pkg/protocol/message.go, internal/db/schema.sql):
- *   The server DB has prompts.session_id FK → sessions.id with FK enforcement
- *   on. A prompt_submit without a prior session_start fails with a FK error.
- *   Therefore we send TWO messages per call:
+ * Protocol (defined in the external watchtower server repo; not present in
+ * this repo — reference only):
+ *   The watchtower DB has prompts.session_id FK → sessions.id with FK
+ *   enforcement on. A prompt_submit without a prior session_start fails with a
+ *   FK constraint error. Therefore we send TWO messages per call:
  *     1. session_start  — creates the session row
  *     2. prompt_submit  — stores the token counts
  *
  * Envelope format:
  *   { type, session_id, timestamp, host, payload }
- * session_start payload (SessionStartPayload):
- *   { working_dir, git_repo, git_branch?, metadata? }
+ * session_start payload sent here (minimal subset of SessionStartPayload):
+ *   { working_dir: "", git_repo: false }
  * prompt_submit payload (PromptSubmitPayload):
  *   { prompt, sequence, input_tokens?, output_tokens?, timestamp }
  */

@@ -7,8 +7,8 @@
  *      field is redacted.
  *   2. Default-off — no WATCHTOWER_URL → globalThis.WebSocket constructor is
  *      never called (mocked and counted).
- *   3. Connect failure — use a port known to be closed (start + stop an
- *      ephemeral server to allocate a port, then stop it before connecting).
+ *   3. Connection rejected — an ephemeral server that rejects WS upgrades
+ *      with HTTP 400 deterministically triggers the client's error/close path.
  *      Resolves without throwing.
  */
 
@@ -16,7 +16,8 @@ import { describe, test, expect, afterEach } from "bun:test";
 import { pushPromptTokens } from "./watchtower-client.js";
 
 // Sentinel: distinguishes "test did not touch WebSocket" from "test explicitly
-// deleted it". Only restore when the test set wsMocked = true.
+// replaced it". Only restore globalThis.WebSocket when a test set savedWebSocket
+// to something other than WS_NOT_MOCKED (i.e. the test saved and replaced it).
 const WS_NOT_MOCKED = Symbol("WS_NOT_MOCKED");
 
 // Save / restore WATCHTOWER_URL and any globalThis.WebSocket mock around every test.
