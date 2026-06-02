@@ -298,7 +298,6 @@ export async function runCliJob(job: Job): Promise<void> {
       void pushPromptTokens({
         sessionId: job.id,
         sequence: 1,
-        prompt: job.prompt,
         inputTokens: finalized.inputTokens,
         outputTokens: finalized.outputTokens,
       });

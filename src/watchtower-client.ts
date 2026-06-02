@@ -19,7 +19,7 @@
  * session_start payload sent here (minimal subset of SessionStartPayload):
  *   { working_dir: "", git_repo: false }
  * prompt_submit payload (PromptSubmitPayload):
- *   { prompt, sequence, input_tokens?, output_tokens?, timestamp }
+ *   { prompt: "[redacted]", sequence, input_tokens?, output_tokens?, timestamp }
  */
 
 import { hostname } from "os";
@@ -41,8 +41,6 @@ export interface PushPromptTokensInput {
   sessionId: string;
   /** Sequence number within the session (1 for a single-shot job). */
   sequence: number;
-  /** Original job prompt (redacted before sending — may contain secrets). */
-  prompt: string;
   /** Input token count (omitted when 0). */
   inputTokens: number;
   /** Output token count (omitted when 0). */

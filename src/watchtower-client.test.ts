@@ -4,7 +4,7 @@
  * Closed-loop assertions:
  *   1. Happy path — mock WS server captures messages; asserts session_start
  *      is sent before prompt_submit, token counts are correct, and prompt
- *      field is redacted.
+ *      field is always the constant "[redacted]".
  *   2. Default-off — no WATCHTOWER_URL → globalThis.WebSocket constructor is
  *      never called (mocked and counted).
  *   3. Connection rejected — an ephemeral server that rejects WS upgrades
@@ -118,7 +118,6 @@ describe("pushPromptTokens — happy path", () => {
       await pushPromptTokens({
         sessionId: "job-abc-123",
         sequence: 1,
-        prompt: "do the thing",
         inputTokens: 42,
         outputTokens: 17,
       });
@@ -150,7 +149,6 @@ describe("pushPromptTokens — happy path", () => {
       await pushPromptTokens({
         sessionId: "job-abc-123",
         sequence: 1,
-        prompt: "do the thing",
         inputTokens: 42,
         outputTokens: 17,
       });
@@ -175,7 +173,7 @@ describe("pushPromptTokens — happy path", () => {
     }
   });
 
-  test("prompt field in payload is redacted (not the raw user prompt)", async () => {
+  test("prompt field in payload is always the constant [redacted]", async () => {
     savedUrl = process.env.WATCHTOWER_URL;
     const { port, messages, stop } = startMockServer();
     process.env.WATCHTOWER_URL = `ws://localhost:${port}`;
@@ -184,7 +182,6 @@ describe("pushPromptTokens — happy path", () => {
       await pushPromptTokens({
         sessionId: "job-redact",
         sequence: 1,
-        prompt: "secret api key: sk-abc123",
         inputTokens: 5,
         outputTokens: 3,
       });
@@ -193,9 +190,7 @@ describe("pushPromptTokens — happy path", () => {
       const second = JSON.parse(msgs[1]!) as Record<string, unknown>;
       const payload = second.payload as Record<string, unknown>;
 
-      // Must not contain the raw prompt
-      expect(payload.prompt).not.toBe("secret api key: sk-abc123");
-      // Must be the fixed redaction placeholder
+      // The client never accepts a raw prompt; payload always sends the constant.
       expect(payload.prompt).toBe("[redacted]");
     } finally {
       stop();
@@ -209,9 +204,8 @@ describe("pushPromptTokens — happy path", () => {
 
     try {
       await pushPromptTokens({
-        sessionId: "job-xyz",
+        sessionId: "job-no-input",
         sequence: 1,
-        prompt: "run tests",
         inputTokens: 0,
         outputTokens: 5,
       });
@@ -222,6 +216,30 @@ describe("pushPromptTokens — happy path", () => {
 
       expect("input_tokens" in payload).toBe(false);
       expect(payload.output_tokens).toBe(5);
+    } finally {
+      stop();
+    }
+  });
+
+  test("omits output_tokens when 0", async () => {
+    savedUrl = process.env.WATCHTOWER_URL;
+    const { port, messages, stop } = startMockServer();
+    process.env.WATCHTOWER_URL = `ws://localhost:${port}`;
+
+    try {
+      await pushPromptTokens({
+        sessionId: "job-no-output",
+        sequence: 1,
+        inputTokens: 7,
+        outputTokens: 0,
+      });
+
+      const msgs = await messages;
+      const second = JSON.parse(msgs[1]!) as Record<string, unknown>;
+      const payload = second.payload as Record<string, unknown>;
+
+      expect(payload.input_tokens).toBe(7);
+      expect("output_tokens" in payload).toBe(false);
     } finally {
       stop();
     }
@@ -246,7 +264,6 @@ describe("pushPromptTokens — default off", () => {
     await pushPromptTokens({
       sessionId: "job-no-url",
       sequence: 1,
-      prompt: "noop",
       inputTokens: 10,
       outputTokens: 3,
     });
@@ -263,7 +280,6 @@ describe("pushPromptTokens — default off", () => {
       pushPromptTokens({
         sessionId: "job-no-url-2",
         sequence: 1,
-        prompt: "noop",
         inputTokens: 10,
         outputTokens: 3,
       })
@@ -290,7 +306,6 @@ describe("pushPromptTokens — connection rejected", () => {
         pushPromptTokens({
           sessionId: "job-rejected",
           sequence: 1,
-          prompt: "will fail",
           inputTokens: 5,
           outputTokens: 2,
         })
