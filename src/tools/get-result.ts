@@ -33,6 +33,17 @@ export async function handleGetResult(args: GetResultInput) {
     result.artifacts = job.artifacts;
   }
 
+  // Token usage / cost, when extracted from the agent's structured output.
+  if (job.inputTokens != null) result.inputTokens = job.inputTokens;
+  if (job.outputTokens != null) result.outputTokens = job.outputTokens;
+  if (job.estimatedCostUsd != null) result.estimatedCostUsd = job.estimatedCostUsd;
+
+  // Surface secret findings for "secret-blocked" jobs so callers can act on
+  // them. Stored findings are already redacted (no raw secret value).
+  if (job.findings && job.findings.length > 0) {
+    result.findings = job.findings;
+  }
+
   if (job.error) result.error = job.error;
 
   return {

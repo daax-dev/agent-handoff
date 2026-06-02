@@ -6,10 +6,171 @@ import { getJob, updateJob } from "./job-store.js";
 import { getHeadCommit, getFilesChanged, getDiffSummary } from "./utils/git.js";
 import { logHandoffEvent } from "./utils/logger.js";
 import { removeFromQueue } from "./pool/job-queue.js";
-import type { Job, AgentName, A2AArtifactResult } from "./types.js";
+import { inspectOutput, redactSecretsFrom, toStoredFinding } from "./lib/inspect-output.js";
+import type { Job, JobStatus, AgentName, A2AArtifactResult } from "./types.js";
 
 // Track running CLI processes for cancellation
 const runningProcesses = new Map<string, ChildProcess>();
+
+export interface FinalizeCliJobInput {
+  /** Process exit code (0 = success). */
+  exitCode: number;
+  /** Parsed adapter output: raw text plus optional structured payload. */
+  parsed: { text: string; structured?: unknown };
+  /** Raw stderr, also scanned for leaked secrets (a clean stdout must not hide a secret on stderr). */
+  stderr?: string;
+  /** Spawn mode; in "tmux" the captured pane echoes the prompt, which must not be inspected as output. */
+  spawnMode?: "headless" | "tmux";
+  /** Original prompt; stripped from tmux captures so echoed prompt text does not trip the gates. */
+  prompt?: string;
+  /** Additional fields to persist on the job alongside the computed status. */
+  base?: Partial<Job>;
+}
+
+/** Remove all occurrences of `prompt` from `text` (tmux echoes the prompt into the pane). */
+function stripPrompt(text: string, prompt: string): string {
+  if (!prompt) return text;
+  return text.split(prompt).join("");
+}
+
+/**
+ * Finalize a CLI job after the agent exits, applying the inspectOutput gates
+ * (Issue 1) before recording terminal status:
+ *   - secrets found        → "secret-blocked" (redacted findings recorded)
+ *   - exit 0 + self-claim  → "verification-required"
+ *   - otherwise            → "completed" (exit 0) or "failed"
+ *
+ * Token usage / cost are persisted on every terminal status when present.
+ * Separated from {@link runCliJob} so the gating logic is unit-testable without
+ * spawning a real agent process.
+ */
+export function finalizeCliJob(jobId: string, input: FinalizeCliJobInput): Job | undefined {
+  const { exitCode, parsed, stderr, spawnMode, prompt, base = {} } = input;
+  const completedAt = new Date().toISOString();
+
+  const isTmux = spawnMode === "tmux" && !!prompt;
+
+  // Phrase gate input: in tmux the captured pane echoes the prompt, so strip the
+  // known prompt — otherwise a prompt that happens to contain a completion phrase
+  // ("Done!") would falsely mark the job verification-required.
+  const agentText = isTmux ? stripPrompt(parsed.text, prompt) : parsed.text;
+
+  // Secret gate input (aux): the secret scan must still see the FULL persisted
+  // output — the complete tmux pane (incl. the echoed prompt) plus stderr — so a
+  // credential anywhere that ends up stored is detected and redacted, even one
+  // that only appears in the stripped prompt. stderr never feeds the phrase gate.
+  const secretAux = isTmux
+    ? [parsed.text, stderr].filter(Boolean).join("\n")
+    : stderr;
+  const inspection = inspectOutput(agentText, parsed.structured, secretAux);
+
+  // Token usage is persisted regardless of which terminal status is recorded.
+  const tokenFields = {
+    inputTokens: inspection.tokens?.input ?? null,
+    outputTokens: inspection.tokens?.output ?? null,
+    estimatedCostUsd: inspection.tokens?.costUsd ?? null,
+  };
+
+  if (inspection.secretsFound) {
+    // Scrub the detected secret from any output we persist, and store only
+    // redacted findings — the raw credential is never written to the job record
+    // or surfaced through get_result.
+    return updateJob(jobId, {
+      ...base,
+      ...tokenFields,
+      stdout: redactSecretsFrom(base.stdout, inspection.findings),
+      stderr: redactSecretsFrom(base.stderr, inspection.findings),
+      status: "secret-blocked",
+      findings: inspection.findings.map(toStoredFinding),
+      completedAt,
+    });
+  }
+
+  if (exitCode === 0 && inspection.claimsCompletion) {
+    return updateJob(jobId, {
+      ...base,
+      ...tokenFields,
+      status: "verification-required",
+      completedAt,
+    });
+  }
+
+  return updateJob(jobId, {
+    ...base,
+    ...tokenFields,
+    status: exitCode === 0 ? "completed" : "failed",
+    completedAt,
+  });
+}
+
+export interface FinalizeA2AJobInput {
+  /** Agent response text (joined A2A messages). */
+  text: string;
+  /** Returned artifacts; their text is also scanned and redacted on a secret hit. */
+  artifacts: A2AArtifactResult[];
+  /** Whether the remote task reported success. */
+  succeeded: boolean;
+  /** Additional fields to persist on the job alongside the computed status. */
+  base?: Partial<Job>;
+}
+
+/**
+ * Finalize an A2A job, applying the same inspectOutput gates as
+ * {@link finalizeCliJob} so a delegated agent that returns a secret in a message
+ * or artifact is caught (secret-blocked) and the raw value is redacted from both
+ * stdout and artifacts before persisting. A2A carries no token usage payload.
+ */
+export function finalizeA2AJob(jobId: string, input: FinalizeA2AJobInput): Job | undefined {
+  const { text, artifacts, succeeded, base = {} } = input;
+  const completedAt = new Date().toISOString();
+  // Scan every persisted field that get_result returns — artifact name,
+  // description, and text, plus any error message — so a secret in any of them
+  // trips the gate.
+  const scanFields = [
+    ...artifacts.flatMap((a) => [a.name, a.description, a.text]),
+    base.error,
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
+  const inspection = inspectOutput(text, null, scanFields.join("\n"));
+  // error is persisted on every terminal status, so always pass it through
+  // redaction (a no-op when no secret was found).
+  const redactedError = redactSecretsFrom(base.error, inspection.findings);
+
+  if (inspection.secretsFound) {
+    return updateJob(jobId, {
+      ...base,
+      stdout: redactSecretsFrom(text, inspection.findings),
+      artifacts: artifacts.map((a) => ({
+        name: redactSecretsFrom(a.name, inspection.findings),
+        description: redactSecretsFrom(a.description, inspection.findings),
+        text: redactSecretsFrom(a.text, inspection.findings),
+      })),
+      error: redactedError,
+      status: "secret-blocked",
+      findings: inspection.findings.map(toStoredFinding),
+      completedAt,
+    });
+  }
+
+  if (succeeded && inspection.claimsCompletion) {
+    return updateJob(jobId, {
+      ...base,
+      stdout: text,
+      artifacts,
+      error: redactedError,
+      status: "verification-required",
+      completedAt,
+    });
+  }
+
+  return updateJob(jobId, {
+    ...base,
+    stdout: text,
+    artifacts,
+    error: redactedError,
+    status: succeeded ? "completed" : "failed",
+    completedAt,
+  });
+}
 
 export async function runCliJob(job: Job): Promise<void> {
   const adapter = getAdapter(job.agent!);
@@ -105,21 +266,29 @@ export async function runCliJob(job: Job): Promise<void> {
     }
 
     const durationMs = Date.now() - startTime;
-    const status = result.exitCode === 0 ? "completed" : "failed";
 
     // Parse structured output from agent adapter
     const parsed = adapter.parseOutput(result.stdout);
 
-    updateJob(job.id, {
-      status,
-      completedAt: new Date().toISOString(),
-      pid: result.pid,
+    // Inspect output before recording terminal status: secret gate, phrase
+    // gate, and token extraction (Issue 1).
+    const finalized = finalizeCliJob(job.id, {
       exitCode: result.exitCode,
-      stdout: parsed.text,
+      parsed,
       stderr: result.stderr,
-      filesChanged,
-      diffSummary,
+      spawnMode: job.spawnMode,
+      prompt: job.prompt,
+      base: {
+        pid: result.pid,
+        exitCode: result.exitCode,
+        stdout: parsed.text,
+        stderr: result.stderr,
+        filesChanged,
+        diffSummary,
+      },
     });
+    const status: JobStatus =
+      finalized?.status ?? (result.exitCode === 0 ? "completed" : "failed");
 
     logHandoffEvent({
       timestamp: new Date().toISOString(),
@@ -198,15 +367,16 @@ export async function runA2AJob(job: Job): Promise<void> {
       .map((p: { type: string; text?: string }) => (p as { type: "text"; text: string }).text)
       .join("\n");
 
-    const status = finalTask.status === "completed" ? "completed" : "failed";
+    const succeeded = finalTask.status === "completed";
 
-    updateJob(job.id, {
-      status,
-      completedAt: new Date().toISOString(),
-      stdout: agentMessages,
+    // Inspect A2A output with the same gates as the CLI path (Issue 1).
+    const finalized = finalizeA2AJob(job.id, {
+      text: agentMessages,
       artifacts,
-      error: finalTask.error?.message,
+      succeeded,
+      base: { error: finalTask.error?.message },
     });
+    const status: JobStatus = finalized?.status ?? (succeeded ? "completed" : "failed");
 
     logHandoffEvent({
       timestamp: new Date().toISOString(),

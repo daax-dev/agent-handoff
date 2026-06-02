@@ -25,3 +25,6 @@ coverage/
 
 # Packed tarballs
 *.tgz
+
+# Claude-flow local session telemetry (generated; machine-specific)
+.claude-flow/

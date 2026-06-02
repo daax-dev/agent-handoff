@@ -1,6 +1,18 @@
+import type { Finding, StoredFinding } from "./lib/inspect-output.js";
+
 export type AgentName = "claude" | "codex" | "gemini" | "copilot" | "opencode";
 
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "timed_out";
+export type { Finding, StoredFinding };
+
+export type JobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "timed_out"
+  | "secret-blocked"
+  | "verification-required";
 
 export type TransportMode = "cli" | "a2a" | "pool";
 
@@ -29,6 +41,15 @@ export interface Job {
   gitHeadBefore?: string;
   filesChanged?: string[];
   diffSummary?: string;
+  // Output inspection (Issue 1: inspectOutput middleware)
+  /** Redacted secret findings recorded when status is "secret-blocked" (no raw values). */
+  findings?: StoredFinding[];
+  /** Input token count parsed from the agent's structured output, if any. */
+  inputTokens?: number | null;
+  /** Output token count parsed from the agent's structured output, if any. */
+  outputTokens?: number | null;
+  /** Estimated cost in USD derived from token usage and configured pricing. */
+  estimatedCostUsd?: number | null;
   // A2A-specific
   a2aTaskId?: string;
   artifacts?: A2AArtifactResult[];
