@@ -26,12 +26,21 @@ import { hostname } from "os";
 const CONNECT_TIMEOUT_MS = 3000;
 const SEND_TIMEOUT_MS = 3000;
 
+/** Minimal WS interface we use (subset of browser WebSocket). */
+interface MinimalWS {
+  onopen: (() => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onclose: (() => void) | null;
+  send(data: string): void;
+  close(): void;
+}
+
 export interface PushPromptTokensInput {
   /** Job ID — used as watchtower session_id. */
   sessionId: string;
   /** Sequence number within the session (1 for a single-shot job). */
   sequence: number;
-  /** Original job prompt. */
+  /** Original job prompt (redacted before sending — may contain secrets). */
   prompt: string;
   /** Input token count (omitted when 0). */
   inputTokens: number;
@@ -57,8 +66,7 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
     let settled = false;
     let connectTimer: ReturnType<typeof setTimeout> | null = null;
     let sendTimer: ReturnType<typeof setTimeout> | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let ws: any | null = null;
+    let ws: MinimalWS | null = null;
 
     function finish(): void {
       if (settled) return;
@@ -76,16 +84,7 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
 
     try {
       // Use the global WebSocket (available in Bun and Node 22+).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const WSConstructor = (globalThis as any).WebSocket as
-        | (new (url: string) => {
-            onopen: (() => void) | null;
-            onerror: ((e: unknown) => void) | null;
-            onclose: (() => void) | null;
-            send(data: string): void;
-            close(): void;
-          })
-        | undefined;
+      const WSConstructor = (globalThis as { WebSocket?: new (url: string) => MinimalWS }).WebSocket;
 
       if (!WSConstructor) {
         console.error("[watchtower] WebSocket not available in this runtime");
@@ -93,18 +92,25 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
         return;
       }
 
-      ws = new WSConstructor(url);
+      const socket = new WSConstructor(url);
+      ws = socket;
 
-      ws.onerror = (err: unknown) => {
+      socket.onerror = (err: unknown) => {
         console.error("[watchtower] WebSocket error:", err instanceof Error ? err.message : String(err));
         finish();
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
         finish();
       };
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        // Guard: if the connect timeout already fired and settled the promise,
+        // do nothing. Without this guard, ws.onopen could run after finish()
+        // and schedule sendTimer or attempt sends on an already-settled call,
+        // keeping the process alive for up to SEND_TIMEOUT_MS.
+        if (settled) return;
+
         if (connectTimer !== null) {
           clearTimeout(connectTimer);
           connectTimer = null;
@@ -119,6 +125,11 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
           const now = new Date().toISOString();
           const host = hostname();
 
+          // Redact the prompt: it may contain credentials or PII. Send only a
+          // fixed placeholder so the sequence/token counts are recorded without
+          // persisting sensitive user content in the external service.
+          const safePrompt = "[redacted]";
+
           // 1. session_start — required before prompt_submit due to FK constraint
           const sessionStart = {
             type: "session_start",
@@ -130,7 +141,7 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
               git_repo: false,
             },
           };
-          ws.send(JSON.stringify(sessionStart));
+          socket.send(JSON.stringify(sessionStart));
 
           // 2. prompt_submit — stores the token counts for this job
           const promptSubmit = {
@@ -139,21 +150,21 @@ export function pushPromptTokens(input: PushPromptTokensInput): Promise<void> {
             timestamp: now,
             host,
             payload: {
-              prompt: input.prompt,
+              prompt: safePrompt,
               sequence: input.sequence,
               ...(input.inputTokens > 0 ? { input_tokens: input.inputTokens } : {}),
               ...(input.outputTokens > 0 ? { output_tokens: input.outputTokens } : {}),
               timestamp: now,
             },
           };
-          ws.send(JSON.stringify(promptSubmit));
+          socket.send(JSON.stringify(promptSubmit));
         } catch (err) {
           console.error("[watchtower] send failed:", err instanceof Error ? err.message : String(err));
         }
 
         // Close cleanly after sends. Wrap in try so a runtime throw on close
         // does not escape the async handler and violate the no-throws contract.
-        try { ws.close(); } catch { /* best effort */ }
+        try { socket.close(); } catch { /* best effort */ }
       };
     } catch (err) {
       console.error("[watchtower] setup failed:", err instanceof Error ? err.message : String(err));

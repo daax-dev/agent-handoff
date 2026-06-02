@@ -3,10 +3,13 @@
  *
  * Closed-loop assertions:
  *   1. Happy path — mock WS server captures messages; asserts session_start
- *      is sent before prompt_submit, and token counts are correct.
+ *      is sent before prompt_submit, token counts are correct, and prompt
+ *      field is redacted.
  *   2. Default-off — no WATCHTOWER_URL → globalThis.WebSocket constructor is
  *      never called (mocked and counted).
- *   3. Connect failure — refused port → resolves without throwing.
+ *   3. Connect failure — use a port known to be closed (start + stop an
+ *      ephemeral server to allocate a port, then stop it before connecting).
+ *      Resolves without throwing.
  */
 
 import { describe, test, expect, afterEach } from "bun:test";
@@ -30,11 +33,9 @@ afterEach(() => {
 
   if (savedWebSocket !== WS_NOT_MOCKED) {
     if (savedWebSocket === undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (globalThis as any).WebSocket;
+      delete (globalThis as { WebSocket?: unknown }).WebSocket;
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (globalThis as any).WebSocket = savedWebSocket;
+      (globalThis as { WebSocket?: unknown }).WebSocket = savedWebSocket;
     }
   }
   savedWebSocket = WS_NOT_MOCKED;
@@ -82,11 +83,26 @@ function startMockServer(): {
   };
 }
 
+/**
+ * Allocate an ephemeral port by starting and immediately stopping a server.
+ * Returns a port number that is guaranteed to be closed (not listening).
+ */
+async function getClosedPort(): Promise<number> {
+  const server = Bun.serve({
+    port: 0,
+    fetch() { return new Response("noop"); },
+    websocket: { message() {}, open() {}, close() {} },
+  });
+  const port = server.port as number;
+  await server.stop(true);
+  return port;
+}
+
 // ---------------------------------------------------------------------------
 // 1. Happy path: message order + structure
 // ---------------------------------------------------------------------------
 describe("pushPromptTokens — happy path", () => {
-  test("sends session_start before prompt_submit (P1 regression)", async () => {
+  test("sends session_start before prompt_submit (P1 regression: FK ordering)", async () => {
     savedUrl = process.env.WATCHTOWER_URL;
     const { port, messages, stop } = startMockServer();
     process.env.WATCHTOWER_URL = `ws://localhost:${port}`;
@@ -144,10 +160,36 @@ describe("pushPromptTokens — happy path", () => {
       // Payload
       const payload = second.payload as Record<string, unknown>;
       expect(payload.sequence).toBe(1);
-      expect(payload.prompt).toBe("do the thing");
       expect(payload.input_tokens).toBe(42);
       expect(payload.output_tokens).toBe(17);
       expect(typeof payload.timestamp).toBe("string");
+    } finally {
+      stop();
+    }
+  });
+
+  test("prompt field in payload is redacted (not the raw user prompt)", async () => {
+    savedUrl = process.env.WATCHTOWER_URL;
+    const { port, messages, stop } = startMockServer();
+    process.env.WATCHTOWER_URL = `ws://localhost:${port}`;
+
+    try {
+      await pushPromptTokens({
+        sessionId: "job-redact",
+        sequence: 1,
+        prompt: "secret api key: sk-abc123",
+        inputTokens: 5,
+        outputTokens: 3,
+      });
+
+      const msgs = await messages;
+      const second = JSON.parse(msgs[1]!) as Record<string, unknown>;
+      const payload = second.payload as Record<string, unknown>;
+
+      // Must not contain the raw prompt
+      expect(payload.prompt).not.toBe("secret api key: sk-abc123");
+      // Must be the fixed redaction placeholder
+      expect(payload.prompt).toBe("[redacted]");
     } finally {
       stop();
     }
@@ -185,14 +227,12 @@ describe("pushPromptTokens — happy path", () => {
 describe("pushPromptTokens — default off", () => {
   test("does not construct WebSocket when WATCHTOWER_URL is unset", async () => {
     savedUrl = process.env.WATCHTOWER_URL;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    savedWebSocket = (globalThis as any).WebSocket;
+    savedWebSocket = (globalThis as { WebSocket?: unknown }).WebSocket;
 
     delete process.env.WATCHTOWER_URL;
 
     let constructorCallCount = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).WebSocket = function MockWS() {
+    (globalThis as { WebSocket?: unknown }).WebSocket = function MockWS() {
       constructorCallCount++;
     };
 
@@ -227,13 +267,15 @@ describe("pushPromptTokens — default off", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Connect failure: refused port → resolves without throwing
+// 3. Connect failure: closed port → resolves without throwing
 // ---------------------------------------------------------------------------
 describe("pushPromptTokens — connect failure", () => {
-  test("resolves without throwing when the target port is refused", async () => {
+  test("resolves without throwing when the target port is known to be closed", async () => {
     savedUrl = process.env.WATCHTOWER_URL;
-    // Port 1 is privileged and always refused (or unreachable) in test env.
-    process.env.WATCHTOWER_URL = "ws://localhost:1";
+    // Obtain a port that was listening but has since been stopped; guaranteed
+    // to be closed (not occupied) at the time of this test.
+    const closedPort = await getClosedPort();
+    process.env.WATCHTOWER_URL = `ws://localhost:${closedPort}`;
 
     await expect(
       pushPromptTokens({
