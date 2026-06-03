@@ -24,7 +24,7 @@ jobs:
         run: bun run test
 
       - name: Unit tests (bun native)
-        run: bun test src/lib/inspect-output.test.ts src/job-runner.test.ts
+        run: bun test src/lib/inspect-output.test.ts src/job-runner.test.ts src/watchtower-client.test.ts
 
       - name: Build
         run: bun run build

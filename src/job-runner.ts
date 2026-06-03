@@ -7,6 +7,7 @@ import { getHeadCommit, getFilesChanged, getDiffSummary } from "./utils/git.js";
 import { logHandoffEvent } from "./utils/logger.js";
 import { removeFromQueue } from "./pool/job-queue.js";
 import { inspectOutput, redactSecretsFrom, toStoredFinding } from "./lib/inspect-output.js";
+import { pushPromptTokens } from "./watchtower-client.js";
 import type { Job, JobStatus, AgentName, A2AArtifactResult } from "./types.js";
 
 // Track running CLI processes for cancellation
@@ -289,6 +290,18 @@ export async function runCliJob(job: Job): Promise<void> {
     });
     const status: JobStatus =
       finalized?.status ?? (result.exitCode === 0 ? "completed" : "failed");
+
+    // Push token usage to watchtower (best-effort, fire-and-forget).
+    // Tokens come from finalized (set by finalizeCliJob via inspectOutput),
+    // not from job (which predates the finalize call).
+    if (finalized && finalized.inputTokens != null && finalized.outputTokens != null) {
+      void pushPromptTokens({
+        sessionId: job.id,
+        sequence: 1,
+        inputTokens: finalized.inputTokens,
+        outputTokens: finalized.outputTokens,
+      });
+    }
 
     logHandoffEvent({
       timestamp: new Date().toISOString(),
