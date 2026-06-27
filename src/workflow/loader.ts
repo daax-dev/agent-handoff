@@ -49,6 +49,15 @@ export function listWorkflows(baseDir = process.cwd()): string[] {
     .filter((f) => f.endsWith(".js"))
     .map((f) => f.slice(0, -3)) // strip ".js"
     .filter((name) => name.length > 0 && !name.includes(".")) // bare-runnable only
+    .filter((name) => {
+      // Surface only entries loadWorkflow() would accept: a real file (or a
+      // symlink to one). A directory named "foo.js" must not be advertised.
+      try {
+        return statSync(path.join(dir, `${name}.js`)).isFile();
+      } catch {
+        return false; // race-removed, broken symlink, permission error, etc.
+      }
+    })
     .sort();
 }
 

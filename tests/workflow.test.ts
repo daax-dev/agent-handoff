@@ -330,6 +330,28 @@ describe("workflow runner — budget", () => {
       ),
     ).rejects.toBeInstanceOf(BudgetExceededError);
   });
+
+  test("rejects a non-finite or non-positive budget with RangeError", async () => {
+    const run = (budget: unknown) =>
+      runWorkflow((ctx) => ctx.agent({ prompt: "x" }), {
+        executor: fixedExecutor(ok("r")),
+        defaultAgent: "claude",
+        budget: budget as number,
+      });
+    await expect(run(NaN)).rejects.toBeInstanceOf(RangeError);
+    await expect(run(0)).rejects.toBeInstanceOf(RangeError);
+    await expect(run(-5)).rejects.toBeInstanceOf(RangeError);
+    await expect(run("100")).rejects.toBeInstanceOf(RangeError);
+  });
+
+  test("allows an unbounded (Infinity) budget", async () => {
+    const run = await runWorkflow((ctx) => ctx.agent({ prompt: "x" }), {
+      executor: fixedExecutor(ok("ok", undefined, 6)),
+      defaultAgent: "claude",
+      budget: Infinity,
+    });
+    expect(run.tokensUsed).toBe(6);
+  });
 });
 
 // --- runner: args + phaseLog ----------------------------------------------
@@ -476,6 +498,20 @@ describe("workflow loader", () => {
     writeFileSync(path.join(dir, "notes.txt"), "ignore me\n");
     try {
       expect(listWorkflows(base)).toEqual(["alpha"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("listWorkflows skips a directory named like a workflow file", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "wf-dirjs-"));
+    const dir = path.join(base, ".claude", "workflows");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "real.js"), "export default () => {};\n");
+    mkdirSync(path.join(dir, "fake.js")); // directory, not a loadable file
+    try {
+      // "fake" must not be advertised: loadWorkflow() would always reject it.
+      expect(listWorkflows(base)).toEqual(["real"]);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

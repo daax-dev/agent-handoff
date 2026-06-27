@@ -79,6 +79,15 @@ export async function runWorkflow(
   if (!Number.isInteger(maxRetries) || maxRetries < 1) {
     throw new RangeError(`maxRetries must be a positive integer, got ${String(options.maxRetries)}`);
   }
+  if (options.budget !== undefined) {
+    const b = options.budget;
+    // Reject NaN / non-finite-but-negative / zero: a non-positive or NaN total
+    // silently disables enforcement (used >= total stays falsey, remaining is
+    // NaN), so fail fast. Infinity is allowed (the unbounded default).
+    if (typeof b !== "number" || Number.isNaN(b) || b <= 0) {
+      throw new RangeError(`budget must be a positive number, got ${String(options.budget)}`);
+    }
+  }
   const budget = new Budget(options.budget ?? Infinity);
   const phaseLogEntries: PhaseLogEntry[] = [];
   const agentCalls: AgentCallRecord[] = [];
