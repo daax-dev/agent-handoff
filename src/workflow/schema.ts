@@ -36,13 +36,39 @@ export function fieldMapToZod(map: FieldMap): ZodTypeAny {
   return z.object(shape).passthrough();
 }
 
-/** Resolve a {@link WorkflowSchema} (shorthand or Zod) into a concrete validator. */
+/**
+ * Wrap an element validator so it validates an array of that element. Works for
+ * any {@link ZodLikeSchema} (not only real Zod schemas), keeping the `array`
+ * flag honored uniformly for field-map and Zod inputs.
+ */
+function arrayOf(element: ZodLikeSchema): ZodLikeSchema {
+  return {
+    safeParse(data: unknown) {
+      if (!Array.isArray(data)) {
+        return { success: false, error: new Error("Expected an array") };
+      }
+      const out: unknown[] = [];
+      for (let i = 0; i < data.length; i++) {
+        const result = element.safeParse(data[i]);
+        if (!result.success) {
+          const detail = result.error instanceof Error ? result.error.message : JSON.stringify(result.error);
+          return { success: false, error: new Error(`Item ${i}: ${detail}`) };
+        }
+        out.push(result.data);
+      }
+      return { success: true, data: out };
+    },
+  };
+}
+
+/**
+ * Resolve a {@link WorkflowSchema} (shorthand or Zod) into a concrete validator.
+ * `array` wraps the element validator in both cases so `array: true` is honored
+ * for a Zod schema exactly as it is for the field-map shorthand.
+ */
 export function resolveSchema(schema: WorkflowSchema, array: boolean): ZodLikeSchema {
-  if (isZodLike(schema)) {
-    return schema;
-  }
-  const objectSchema = fieldMapToZod(schema);
-  return array ? z.array(objectSchema) : objectSchema;
+  const element = isZodLike(schema) ? schema : fieldMapToZod(schema);
+  return array ? arrayOf(element) : element;
 }
 
 /**

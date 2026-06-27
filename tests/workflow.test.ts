@@ -7,6 +7,7 @@ import { runWorkflow } from "../src/workflow/runner.js";
 import { createCliExecutor } from "../src/workflow/executor.js";
 import { loadWorkflow, resolveWorkflowPath, listWorkflows, WORKFLOWS_DIR } from "../src/workflow/loader.js";
 import { validateAgentOutput, fieldMapToZod } from "../src/workflow/schema.js";
+import { parsePositiveInt, parseArgs } from "../src/cli/commands/workflow.js";
 import {
   AgentFailedError,
   BudgetExceededError,
@@ -102,6 +103,34 @@ describe("workflow runner — agent()", () => {
         defaultAgent: "claude",
       }),
     ).rejects.toThrow(/non-empty prompt/);
+  });
+
+  test("rejects a whitespace-only prompt at the boundary", async () => {
+    await expect(
+      runWorkflow((ctx) => ctx.agent({ prompt: "   \n\t " }), {
+        executor: fixedExecutor(ok("x")),
+        defaultAgent: "claude",
+      }),
+    ).rejects.toThrow(/non-empty prompt/);
+  });
+
+  test("honors array:true with a Zod schema (validates an array, rejects a single object)", async () => {
+    const schema = z.object({ id: z.string() });
+    const payload = [{ id: "a" }, { id: "b" }];
+    const run = await runWorkflow(
+      (ctx) => ctx.agent({ prompt: "many", schema, array: true }),
+      { executor: fixedExecutor(ok(JSON.stringify(payload))), defaultAgent: "claude" },
+    );
+    expect(run.result).toEqual(payload);
+
+    // A single object with array:true must fail (then exhaust retries).
+    await expect(
+      runWorkflow((ctx) => ctx.agent({ prompt: "one", schema, array: true }), {
+        executor: fixedExecutor(ok(JSON.stringify({ id: "a" }))),
+        defaultAgent: "claude",
+        maxRetries: 1,
+      }),
+    ).rejects.toBeInstanceOf(AgentFailedError);
   });
 });
 
@@ -332,6 +361,29 @@ describe("workflow schema validation", () => {
     // Gemini envelope: structured.response.
     const geminiLike = { text: "summary", structured: { response: '{"id":"g"}' }, tokensUsed: 4 };
     expect(validateAgentOutput(geminiLike, { id: "string" }, false)).toEqual({ id: "g" });
+  });
+});
+
+// --- CLI argument parsing --------------------------------------------------
+
+describe("workflow CLI parsing", () => {
+  test("parsePositiveInt accepts positive integers and rejects non-integers/non-positives", () => {
+    expect(parsePositiveInt(undefined, "--budget")).toBeUndefined();
+    expect(parsePositiveInt("200000", "--budget")).toBe(200000);
+    expect(() => parsePositiveInt("1.5", "--max-retries")).toThrow(/positive integer/);
+    expect(() => parsePositiveInt("0", "--budget")).toThrow(/positive integer/);
+    expect(() => parsePositiveInt("-3", "--budget")).toThrow(/positive integer/);
+    expect(() => parsePositiveInt("abc", "--budget")).toThrow(/positive integer/);
+  });
+
+  test("parseArgs JSON-coerces values and rejects malformed pairs", () => {
+    expect(parseArgs(["threshold=100", "name=foo", "flag=true"])).toEqual({
+      threshold: 100,
+      name: "foo",
+      flag: true,
+    });
+    expect(() => parseArgs(["noequals"])).toThrow(/key=value/);
+    expect(() => parseArgs(["=novalue"])).toThrow(/empty key/);
   });
 });
 

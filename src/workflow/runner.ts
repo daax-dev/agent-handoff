@@ -83,7 +83,7 @@ export async function runWorkflow(
   const agentCalls: AgentCallRecord[] = [];
 
   async function agent(spec: AgentSpec): Promise<unknown> {
-    if (!spec || typeof spec.prompt !== "string" || spec.prompt.length === 0) {
+    if (!spec || typeof spec.prompt !== "string" || spec.prompt.trim().length === 0) {
       throw new TypeError("agent() requires a spec with a non-empty prompt string");
     }
     const agentName = spec.agent ?? options.defaultAgent;
