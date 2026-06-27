@@ -1,5 +1,5 @@
 import { describe, test, expect } from "./test-compat.js";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
@@ -401,6 +401,9 @@ describe("workflow CLI parsing", () => {
     expect(() => parsePositiveInt("0", "--budget")).toThrow(/positive integer/);
     expect(() => parsePositiveInt("-3", "--budget")).toThrow(/positive integer/);
     expect(() => parsePositiveInt("abc", "--budget")).toThrow(/positive integer/);
+    // Strict decimal: reject scientific/hex forms Number() would accept.
+    expect(() => parsePositiveInt("1e6", "--budget")).toThrow(/positive integer/);
+    expect(() => parsePositiveInt("0x10", "--budget")).toThrow(/positive integer/);
   });
 
   test("parseArgs JSON-coerces values and rejects malformed pairs", () => {
@@ -445,6 +448,32 @@ describe("workflow loader", () => {
 
   test("listWorkflows finds nothing when the dir is absent", () => {
     expect(listWorkflows(mkdtempSync(path.join(tmpdir(), "wf-empty-")))).toEqual([]);
+  });
+
+  test("listWorkflows returns [] when the workflows path is not a directory", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "wf-notdir-"));
+    mkdirSync(path.join(base, ".claude"));
+    writeFileSync(path.join(base, ".claude", "workflows"), "not a dir"); // file, not dir
+    try {
+      expect(listWorkflows(base)).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("listWorkflows surfaces only bare-runnable names (<name>.js, dotless stem)", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "wf-list-"));
+    const dir = path.join(base, ".claude", "workflows");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "alpha.js"), "export default () => {};\n");
+    writeFileSync(path.join(dir, "beta.mjs"), "export default () => {};\n"); // path-only
+    writeFileSync(path.join(dir, "triage.workflow.js"), "export default () => {};\n"); // path-only
+    writeFileSync(path.join(dir, "notes.txt"), "ignore me\n");
+    try {
+      expect(listWorkflows(base)).toEqual(["alpha"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   test("throws WorkflowLoadError for a missing file", async () => {

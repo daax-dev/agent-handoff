@@ -28,13 +28,28 @@ export function resolveWorkflowPath(ref: string, baseDir = process.cwd()): strin
   return path.resolve(baseDir, ref);
 }
 
-/** List available workflow files (base names) under {@link WORKFLOWS_DIR}. */
+/**
+ * List workflows under {@link WORKFLOWS_DIR} that are runnable by bare name.
+ *
+ * Only `<name>.js` files with a dotless stem are surfaced, matching
+ * {@link resolveWorkflowPath} (bare name → `<name>.js`). Files like
+ * `triage.workflow.js` or `*.mjs` are reachable only by explicit path, so they
+ * are not listed as bare names. Returns `[]` if the directory is absent or the
+ * path is not a directory.
+ */
 export function listWorkflows(baseDir = process.cwd()): string[] {
   const dir = path.resolve(baseDir, WORKFLOWS_DIR);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => ALLOWED_EXTENSIONS.has(path.extname(f)))
-    .map((f) => f.replace(/\.(js|mjs)$/, ""))
+  let entries: string[];
+  try {
+    if (!statSync(dir).isDirectory()) return [];
+    entries = readdirSync(dir);
+  } catch {
+    return []; // missing dir, permission error, etc.
+  }
+  return entries
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => f.slice(0, -3)) // strip ".js"
+    .filter((name) => name.length > 0 && !name.includes(".")) // bare-runnable only
     .sort();
 }
 

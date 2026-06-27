@@ -40,10 +40,18 @@ export function parseArgs(pairs: string[] | undefined): Record<string, unknown> 
   return out;
 }
 
-/** Parse a CLI flag that must be a positive integer (e.g. --budget, --max-retries). */
+/**
+ * Parse a CLI flag that must be a positive integer (e.g. --budget, --max-retries).
+ * Strict decimal only — rejects `1e6`, `0x10`, `1.5`, etc. that `Number()` would
+ * silently accept.
+ */
 export function parsePositiveInt(value: string | undefined, label: string): number | undefined {
   if (value === undefined) return undefined;
-  const n = Number(value);
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${label} must be a positive integer, got "${value}"`);
+  }
+  const n = Number(trimmed);
   if (!Number.isSafeInteger(n) || n <= 0) {
     throw new Error(`${label} must be a positive integer, got "${value}"`);
   }
