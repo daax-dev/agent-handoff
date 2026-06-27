@@ -1,5 +1,4 @@
-import { existsSync, statSync } from "node:fs";
-import { readdirSync } from "node:fs";
+import { statSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { WorkflowLoadError } from "./errors.js";
@@ -62,8 +61,14 @@ export async function loadWorkflow(filePath: string): Promise<WorkflowDefinition
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     throw new WorkflowLoadError(`Workflow file must be .js or .mjs (got "${ext || "none"}")`);
   }
-  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
-    throw new WorkflowLoadError(`Workflow file not found: ${filePath}`);
+  let isFile: boolean;
+  try {
+    isFile = statSync(filePath).isFile();
+  } catch {
+    isFile = false; // missing, unreadable, broken symlink, etc.
+  }
+  if (!isFile) {
+    throw new WorkflowLoadError(`Workflow file not found or not readable: ${filePath}`);
   }
 
   let mod: Record<string, unknown>;

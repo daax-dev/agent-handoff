@@ -447,7 +447,12 @@ describe("workflow loader", () => {
   });
 
   test("listWorkflows finds nothing when the dir is absent", () => {
-    expect(listWorkflows(mkdtempSync(path.join(tmpdir(), "wf-empty-")))).toEqual([]);
+    const base = mkdtempSync(path.join(tmpdir(), "wf-empty-"));
+    try {
+      expect(listWorkflows(base)).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   test("listWorkflows returns [] when the workflows path is not a directory", () => {

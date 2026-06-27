@@ -14,9 +14,11 @@ export class AgentFailedError extends Error {
   readonly attempts: number;
   readonly cause?: unknown;
   /**
-   * Tokens consumed by the failed attempt, when known (the CLI executor can
-   * compute prompt + output cost even on a non-zero exit). The runner charges
-   * this against the budget so failed attempts are accounted, not free.
+   * Tokens consumed, when known. When thrown by the CLI executor for a single
+   * attempt, this is that attempt's prompt + output cost (computed even on a
+   * non-zero exit) — the runner charges it against the budget so failed attempts
+   * are accounted, not free. When thrown by the runner after exhausting retries,
+   * it is the cumulative cost across all attempts of the call.
    */
   readonly tokensUsed?: number;
   constructor(message: string, attempts: number, cause?: unknown, tokensUsed?: number) {
