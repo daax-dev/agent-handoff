@@ -240,6 +240,8 @@ agent-handoff export chg_000001             # push branch + open GitHub PR
 | `agent-handoff merge <id>` | Merge into target branch |
 | `agent-handoff export <id>` | Push branch + open GitHub PR |
 | `agent-handoff import-issue <url>` | Import a GitHub issue as a task |
+| `agent-handoff workflow run <file>` | Run a code-as-orchestrator workflow |
+| `agent-handoff workflow list` | List workflows in `.claude/workflows/` |
 
 Global flags:
 ```bash
@@ -309,6 +311,55 @@ All detected via PATH. Use `list_agents` to see what's installed on your system.
 ---
 
 ## Advanced features
+
+### Workflows — code-as-orchestrator handoff
+
+Instead of an LLM session orchestrating sub-agents (each result re-entering its context window until it fills and degrades), a plain JavaScript file drives orchestration. Agent results pass directly between phases in code and never re-enter a model context, so a workflow can fan out to dozens of agents without the orchestrator getting sloppy.
+
+A workflow file exports a default async function that receives a context object:
+
+```js
+// .claude/workflows/triage.workflow.js
+export default async function triage({ agent, pipeline, phaseLog, budget, args }) {
+  // Typed handoff: the schema is the contract between phases.
+  const issues = await agent({
+    prompt: "List unresolved issues as JSON array of {issueId,title,userCount}.",
+    schema: { issueId: "string", title: "string", userCount: "number" },
+    array: true,
+  });
+
+  // Plain-JS logic — no LLM decision-making, no token tax.
+  const big = issues.filter((i) => i.userCount >= (args.threshold ?? 1));
+  if (big.length === 0) return { fixed: 0 };
+
+  // pipeline streams each item through stages as it completes (vs parallel = batch + wait).
+  phaseLog(`Fixing ${big.length} issues`);
+  const done = await pipeline(big, [
+    (issue) => agent({ prompt: `Investigate and fix ${issue.issueId}: ${issue.title}` }),
+    (fix, issue) => agent({ prompt: `Verify the fix for ${issue.issueId} is real: ${fix}` }),
+  ]);
+  return { fixed: done.length, tokensRemaining: budget.remaining };
+}
+```
+
+```bash
+agent-handoff workflow run triage --agent claude --arg threshold=100 --budget 200000
+agent-handoff workflow run examples/workflows/triage.workflow.js --dry-run   # validate only
+agent-handoff workflow list
+```
+
+Context primitives:
+
+| Primitive | Behavior |
+|-----------|----------|
+| `agent({ prompt, schema?, agent?, model?, array? })` | Spawn one sub-agent (via the CLI adapter layer); returns the schema-validated value, or raw text when no schema. Retries 3× before surfacing failure. |
+| `parallel([...tasks])` | Run thunks/promises concurrently; wait for all (a barrier). |
+| `pipeline(items, [stages])` | Stream each item through the stages concurrently — item B can be in stage 1 while item A is in stage 2. |
+| `phaseLog(message, data?)` | Emit a live progress entry. |
+| `budget` | `{ total, used, remaining }`, queryable mid-loop (e.g. `while (budget.remaining > 50000)`); `agent()` throws once exhausted. |
+| `args` | Runtime arguments from `--arg key=value` (values are JSON-coerced). |
+
+Schemas accept the field-map shorthand (`{ field: "string" | "number" | "boolean" }`, plus `"[]"` suffix for primitive arrays) or any Zod schema. Output is validated at the handoff boundary; mismatches retry then fail.
 
 ### Pass state between agents
 
