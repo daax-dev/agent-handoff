@@ -427,6 +427,17 @@ describe("workflow loader", () => {
     expect(p).toBe(path.resolve("/repo", "examples/x.workflow.js"));
   });
 
+  test("resolveWorkflowPath matches the documented contract (bare name → <name>.js; path runs as-is)", () => {
+    // README: `workflow run triage` resolves to .claude/workflows/triage.js …
+    expect(resolveWorkflowPath("triage", "/repo")).toBe(
+      path.resolve("/repo", WORKFLOWS_DIR, "triage.js"),
+    );
+    // … and an explicit path (incl. the shipped .workflow.js example) runs as-is.
+    expect(resolveWorkflowPath("examples/workflows/triage.workflow.js", "/repo")).toBe(
+      path.resolve("/repo", "examples/workflows/triage.workflow.js"),
+    );
+  });
+
   test("loads the shipped example workflow as a function", async () => {
     const def = await loadWorkflow(resolveWorkflowPath("examples/workflows/triage.workflow.js"));
     expect(typeof def).toBe("function");

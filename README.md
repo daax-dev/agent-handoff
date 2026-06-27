@@ -319,7 +319,7 @@ Instead of an LLM session orchestrating sub-agents (each result re-entering its 
 A workflow file exports a default async function that receives a context object:
 
 ```js
-// .claude/workflows/triage.workflow.js
+// .claude/workflows/triage.js
 export default async function triage({ agent, pipeline, phaseLog, budget, args }) {
   // Typed handoff: the schema is the contract between phases.
   const issues = await agent({
@@ -343,7 +343,9 @@ export default async function triage({ agent, pipeline, phaseLog, budget, args }
 ```
 
 ```bash
+# A bare name resolves to .claude/workflows/<name>.js …
 agent-handoff workflow run triage --agent claude --arg threshold=100 --budget 200000
+# … or pass an explicit path to any .js/.mjs workflow file.
 agent-handoff workflow run examples/workflows/triage.workflow.js --dry-run   # validate only
 agent-handoff workflow list
 ```

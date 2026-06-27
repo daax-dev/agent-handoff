@@ -122,7 +122,9 @@ workflow
 workflow
   .command("list")
   .description("List available workflows in .claude/workflows/")
-  .action(() => workflowListCmd());
+  .action(async () => {
+    await run(() => workflowListCmd());
+  });
 
 function collect(value: string, previous: string[]): string[] {
   return previous.concat([value]);
