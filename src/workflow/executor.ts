@@ -31,11 +31,16 @@ export function createCliExecutor(opts: CliExecutorOptions = {}): AgentExecutor 
       timeoutMs: spec.timeoutMs ?? opts.timeoutMs,
     });
 
+    // Tokens are spent whether the agent exits 0 or not — account both.
+    const tokensUsed = estimateTokens(spec.prompt) + estimateTokens(result.stdout);
+
     if (result.exitCode !== 0) {
       const stderr = result.stderr.trim();
       throw new AgentFailedError(
         `Agent "${spec.agent}" exited with code ${result.exitCode}${stderr ? `: ${stderr}` : ""}`,
         1,
+        undefined,
+        tokensUsed,
       );
     }
 
@@ -43,7 +48,7 @@ export function createCliExecutor(opts: CliExecutorOptions = {}): AgentExecutor 
     return {
       text: parsed.text,
       structured: parsed.structured,
-      tokensUsed: estimateTokens(spec.prompt) + estimateTokens(result.stdout),
+      tokensUsed,
     };
   };
 }

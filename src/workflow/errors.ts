@@ -13,11 +13,18 @@ export class WorkflowLoadError extends Error {
 export class AgentFailedError extends Error {
   readonly attempts: number;
   readonly cause?: unknown;
-  constructor(message: string, attempts: number, cause?: unknown) {
+  /**
+   * Tokens consumed by the failed attempt, when known (the CLI executor can
+   * compute prompt + output cost even on a non-zero exit). The runner charges
+   * this against the budget so failed attempts are accounted, not free.
+   */
+  readonly tokensUsed?: number;
+  constructor(message: string, attempts: number, cause?: unknown, tokensUsed?: number) {
     super(message);
     this.name = "AgentFailedError";
     this.attempts = attempts;
     this.cause = cause;
+    this.tokensUsed = tokensUsed;
   }
 }
 

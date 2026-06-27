@@ -1,4 +1,5 @@
 import type { AgentName } from "../types.js";
+import { estimateTokens } from "../context/token-estimator.js";
 import { AgentFailedError, BudgetExceededError } from "./errors.js";
 import { validateAgentOutput } from "./schema.js";
 import type {
@@ -104,7 +105,15 @@ export async function runWorkflow(
       try {
         raw = await executor(resolved);
       } catch (err) {
-        lastError = err; // executor failed — no tokens charged, retry
+        lastError = err;
+        // A failed attempt still consumed tokens (the agent may have run and
+        // produced output before exiting non-zero). Charge the executor-reported
+        // cost when known, else a prompt estimate floor — so retries respect the
+        // budget and accounting reflects every attempt.
+        const reported = (err as { tokensUsed?: number } | undefined)?.tokensUsed;
+        const failTokens = typeof reported === "number" ? reported : estimateTokens(resolved.prompt);
+        budget.charge(failTokens);
+        tokensUsed += failTokens;
         continue;
       }
 
@@ -142,6 +151,7 @@ export async function runWorkflow(
       `Agent "${agentName}" failed after ${attempts} attempt(s): ${message}`,
       attempts,
       lastError,
+      tokensUsed, // cumulative across all attempts
     );
   }
 

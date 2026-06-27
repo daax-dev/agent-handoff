@@ -159,6 +159,19 @@ describe("workflow runner — retry", () => {
     expect((caught as AgentFailedError).attempts).toBe(3);
   });
 
+  test("charges failed attempts and accumulates tokens across the whole call", async () => {
+    const failErr = () => Object.assign(new Error("boom"), { tokensUsed: 5 });
+    const run = await runWorkflow((ctx) => ctx.agent({ prompt: "retry me" }), {
+      executor: scriptedExecutor([failErr(), failErr(), ok("done", undefined, 10)]),
+      defaultAgent: "claude",
+    });
+    expect(run.result).toBe("done");
+    expect(run.agentCalls[0]?.attempts).toBe(3);
+    // Cumulative across all attempts (failed included): 5 + 5 + 10.
+    expect(run.agentCalls[0]?.tokensUsed).toBe(20);
+    expect(run.tokensUsed).toBe(20);
+  });
+
   test("schema-validation failure is retried then surfaced", async () => {
     let calls = 0;
     const exec: AgentExecutor = async () => {
@@ -284,6 +297,20 @@ describe("workflow runner — budget", () => {
     // 20 budget, 4/call, loop runs while remaining > 5: after 3 calls remaining=8>5,
     // after 4th remaining=4, stop → 4 calls.
     expect(run.result).toBe(4);
+  });
+
+  test("failed attempts consume budget, so retries cannot loop for free", async () => {
+    const failErr = () => Object.assign(new Error("boom"), { tokensUsed: 5 });
+    // budget 8, 5/failed-attempt: attempt 1 → used 5; attempt 2 admitted (5<8) →
+    // used 10; attempt 3 admission sees 10>=8 → BudgetExceededError (not endless).
+    await expect(
+      runWorkflow((ctx) => ctx.agent({ prompt: "x" }), {
+        executor: scriptedExecutor([failErr()]),
+        defaultAgent: "claude",
+        maxRetries: 10,
+        budget: 8,
+      }),
+    ).rejects.toBeInstanceOf(BudgetExceededError);
   });
 
   test("admission check hard-stops after a concurrent in-flight overshoot", async () => {
@@ -471,11 +498,18 @@ describe("createCliExecutor — executor→adapter seam", () => {
     expect(result.tokensUsed).toBe(estimateTokens("do it") + estimateTokens(stdout));
   });
 
-  test("throws AgentFailedError on a non-zero exit code", async () => {
+  test("throws AgentFailedError on a non-zero exit code, with token cost attached", async () => {
+    const stdout = "partial output before failure";
     const exec = createCliExecutor({
-      getAdapter: () => fakeAdapter({ stdout: "", exitCode: 1, stderr: "kaboom" }),
+      getAdapter: () => fakeAdapter({ stdout, exitCode: 1, stderr: "kaboom" }),
     });
-    await expect(exec({ agent: "claude", prompt: "x" })).rejects.toBeInstanceOf(AgentFailedError);
+    const err = await exec({ agent: "claude", prompt: "x" }).then(
+      () => null,
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(AgentFailedError);
+    // The runner relies on this to charge failed attempts against the budget.
+    expect((err as AgentFailedError).tokensUsed).toBe(estimateTokens("x") + estimateTokens(stdout));
   });
 });
 

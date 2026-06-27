@@ -127,13 +127,22 @@ export type WorkflowDefinition = (ctx: WorkflowContext) => Promise<unknown> | un
 // Run records & result
 // ---------------------------------------------------------------------------
 
-/** Record of one agent() call, for observability. */
+/**
+ * Record of one `agent()` call, for observability. A "call" is the whole
+ * retry sequence, so `attempts` and `tokensUsed` are **cumulative across all
+ * attempts** (including failed ones), not per-attempt.
+ */
 export interface AgentCallRecord {
   agent: AgentName;
+  /** First 80 chars of the prompt. */
   promptPreview: string;
+  /** Total attempts made, including retries (1 when it succeeded first try). */
   attempts: number;
+  /** Tokens charged across every attempt of this call, failed attempts included. */
   tokensUsed: number;
+  /** Whether the call ultimately succeeded. */
   ok: boolean;
+  /** Failure message when `ok` is false. */
   error?: string;
 }
 
