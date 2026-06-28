@@ -47,8 +47,11 @@ class Budget implements BudgetView {
     return this.total - this._used;
   }
   charge(tokens: number): void {
-    if (!Number.isFinite(tokens) || tokens < 0) {
-      throw new RangeError(`tokensUsed must be a finite non-negative number, got ${String(tokens)}`);
+    // Reject NaN/Infinity/negative: a non-finite or negative charge makes
+    // budget.used non-finite, which silently disables enforcement (used >= total
+    // turns falsey, remaining becomes NaN). Fail fast instead.
+    if (typeof tokens !== "number" || !Number.isFinite(tokens) || tokens < 0) {
+      throw new RangeError(`token count must be a finite, non-negative number, got ${String(tokens)}`);
     }
     this._used += tokens;
   }
@@ -123,12 +126,16 @@ export async function runWorkflow(
         // cost when known, else a prompt estimate floor — so retries respect the
         // budget and accounting reflects every attempt.
         const reported = (err as { tokensUsed?: number } | undefined)?.tokensUsed;
+        // Accept the executor-reported cost only when it is finite and
+        // non-negative; otherwise fall back to a prompt estimate. A NaN/Infinity/
+        // negative report would otherwise poison the budget via charge().
         const failTokens =
           typeof reported === "number" && Number.isFinite(reported) && reported >= 0
             ? reported
             : estimateTokens(resolved.prompt);
         budget.charge(failTokens);
         tokensUsed += failTokens;
+        continue;
       }
 
       // Executor succeeded: tokens are spent whether or not validation passes.

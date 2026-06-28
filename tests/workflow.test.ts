@@ -352,6 +352,33 @@ describe("workflow runner — budget", () => {
     });
     expect(run.tokensUsed).toBe(6);
   });
+
+  test("rejects an executor that reports a non-finite tokensUsed (charge fails fast)", async () => {
+    // A NaN charge would otherwise make budget.used non-finite and silently
+    // disable enforcement; charge() must throw instead.
+    await expect(
+      runWorkflow((ctx) => ctx.agent({ prompt: "x" }), {
+        executor: fixedExecutor(ok("r", undefined, NaN)),
+        defaultAgent: "claude",
+        budget: 100,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+  });
+
+  test("error-reported NaN tokensUsed falls back to an estimate, not a poisoned budget", async () => {
+    const failErr = () => Object.assign(new Error("boom"), { tokensUsed: NaN });
+    // The NaN report must be ignored (estimate used), so retries still consume a
+    // finite budget and the run fails cleanly with AgentFailedError — not a
+    // RangeError from a poisoned charge.
+    await expect(
+      runWorkflow((ctx) => ctx.agent({ prompt: "x" }), {
+        executor: scriptedExecutor([failErr()]),
+        defaultAgent: "claude",
+        maxRetries: 2,
+        budget: 1_000_000,
+      }),
+    ).rejects.toBeInstanceOf(AgentFailedError);
+  });
 });
 
 // --- runner: args + phaseLog ----------------------------------------------
@@ -436,6 +463,16 @@ describe("workflow CLI parsing", () => {
     });
     expect(() => parseArgs(["noequals"])).toThrow(/key=value/);
     expect(() => parseArgs(["=novalue"])).toThrow(/empty key/);
+  });
+
+  test("parseArgs rejects prototype-polluting keys and never mutates a prototype", () => {
+    for (const key of ["__proto__", "constructor", "prototype"]) {
+      expect(() => parseArgs([`${key}={"polluted":true}`])).toThrow(/reserved key/);
+    }
+    // Even if a guard were bypassed, the result is a null-prototype map: parsing
+    // never reaches Object.prototype.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(parseArgs(["a=1"]))).toBeNull();
   });
 });
 

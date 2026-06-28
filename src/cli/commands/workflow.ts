@@ -19,7 +19,11 @@ export interface WorkflowRunOptions {
 }
 
 /** Parse repeated `--arg key=value` flags into an args object (values JSON-coerced). */
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export function parseArgs(pairs: string[] | undefined): Record<string, unknown> {
+  // Null-prototype map: assigning a "__proto__" key sets an own data property
+  // instead of mutating a prototype, so CLI input cannot pollute prototypes.
   const out: Record<string, unknown> = Object.create(null);
   for (const pair of pairs ?? []) {
     const eq = pair.indexOf("=");
@@ -31,7 +35,7 @@ export function parseArgs(pairs: string[] | undefined): Record<string, unknown> 
     if (!key) {
       throw new Error(`Invalid --arg "${pair}" (empty key)`);
     }
-    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+    if (DANGEROUS_KEYS.has(key)) {
       throw new Error(`Invalid --arg "${pair}" (reserved key "${key}")`);
     }
     try {
