@@ -106,15 +106,49 @@ function tryParseJson(text: string): unknown {
     return JSON.parse(trimmed);
   } catch {
     // Tolerate prose around a fenced or embedded JSON object/array.
-    const match = trimmed.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (match) {
-      try {
-        return JSON.parse(match[1]);
-      } catch {
-        return undefined;
+    const extractFirstJsonValue = (s: string): string | null => {
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch !== "{" && ch !== "[") continue;
+
+        const stack: string[] = [];
+        let inString = false;
+        let escape = false;
+
+        for (let j = i; j < s.length; j++) {
+          const c = s[j];
+
+          if (inString) {
+            if (escape) escape = false;
+            else if (c === "\\") escape = true;
+            else if (c === '"') inString = false;
+            continue;
+          }
+
+          if (c === '"') {
+            inString = true;
+            continue;
+          }
+
+          if (c === "{") stack.push("}");
+          else if (c === "[") stack.push("]");
+          else if (c === "}" || c === "]") {
+            const expected = stack.pop();
+            if (expected !== c) break;
+            if (stack.length === 0) return s.slice(i, j + 1);
+          }
+        }
       }
+      return null;
+    };
+
+    const candidate = extractFirstJsonValue(trimmed);
+    if (!candidate) return undefined;
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return undefined;
     }
-    return undefined;
   }
 }
 
