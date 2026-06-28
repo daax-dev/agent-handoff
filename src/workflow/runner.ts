@@ -47,6 +47,9 @@ class Budget implements BudgetView {
     return this.total - this._used;
   }
   charge(tokens: number): void {
+    if (!Number.isFinite(tokens) || tokens < 0) {
+      throw new RangeError(`tokensUsed must be a finite non-negative number, got ${String(tokens)}`);
+    }
     this._used += tokens;
   }
   assertAvailable(): void {
@@ -120,10 +123,12 @@ export async function runWorkflow(
         // cost when known, else a prompt estimate floor — so retries respect the
         // budget and accounting reflects every attempt.
         const reported = (err as { tokensUsed?: number } | undefined)?.tokensUsed;
-        const failTokens = typeof reported === "number" ? reported : estimateTokens(resolved.prompt);
+        const failTokens =
+          typeof reported === "number" && Number.isFinite(reported) && reported >= 0
+            ? reported
+            : estimateTokens(resolved.prompt);
         budget.charge(failTokens);
         tokensUsed += failTokens;
-        continue;
       }
 
       // Executor succeeded: tokens are spent whether or not validation passes.

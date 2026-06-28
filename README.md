@@ -354,7 +354,7 @@ Context primitives:
 
 | Primitive | Behavior |
 |-----------|----------|
-| `agent({ prompt, schema?, agent?, model?, array? })` | Spawn one sub-agent (via the CLI adapter layer); returns the schema-validated value, or raw text when no schema. Retries 3× before surfacing failure. |
+| `agent({ prompt, schema?, agent?, model?, array?, timeoutMs? })` | Spawn one sub-agent (via the CLI adapter layer); returns the schema-validated value, or raw text when no schema. Retries 3× before surfacing failure. |
 | `parallel([...tasks])` | Run thunks/promises concurrently; wait for all (a barrier). |
 | `pipeline(items, [stages])` | Stream each item through the stages concurrently — item B can be in stage 1 while item A is in stage 2. |
 | `phaseLog(message, data?)` | Emit a live progress entry. |

@@ -20,7 +20,7 @@ export interface WorkflowRunOptions {
 
 /** Parse repeated `--arg key=value` flags into an args object (values JSON-coerced). */
 export function parseArgs(pairs: string[] | undefined): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+  const out: Record<string, unknown> = Object.create(null);
   for (const pair of pairs ?? []) {
     const eq = pair.indexOf("=");
     if (eq === -1) {
@@ -30,6 +30,9 @@ export function parseArgs(pairs: string[] | undefined): Record<string, unknown> 
     const rawValue = pair.slice(eq + 1);
     if (!key) {
       throw new Error(`Invalid --arg "${pair}" (empty key)`);
+    }
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      throw new Error(`Invalid --arg "${pair}" (reserved key "${key}")`);
     }
     try {
       out[key] = JSON.parse(rawValue);
