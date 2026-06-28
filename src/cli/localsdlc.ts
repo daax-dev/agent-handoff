@@ -11,6 +11,7 @@ import { mergeCmd } from "./commands/merge.js";
 import { exportCmd } from "./commands/export.js";
 import { importIssueCmd } from "./commands/import-issue.js";
 import { setupCmd } from "./commands/setup.js";
+import { workflowRunCmd, workflowListCmd, type WorkflowRunOptions } from "./commands/workflow.js";
 
 const invokedAs = path.basename(process.argv[1] ?? "agent-handoff").replace(/\.(js|ts)$/, "") || "agent-handoff";
 
@@ -100,6 +101,34 @@ program
   .action(async (opts: { dryRun?: boolean }) => {
     await run(() => setupCmd(opts));
   });
+
+const workflow = program
+  .command("workflow")
+  .description("Run code-as-orchestrator workflows (deterministic agent handoff)");
+
+workflow
+  .command("run <workflow>")
+  .description("Run a workflow file (.claude/workflows/<name>.js or a path)")
+  .option("--arg <key=value>", "Runtime argument (repeatable; value is JSON-coerced)", collect, [])
+  .option("--budget <tokens>", "Total token budget guard")
+  .option("--agent <name>", "Default agent (claude|codex|gemini|copilot|opencode)")
+  .option("--max-retries <n>", "Retry attempts per agent call (default 3)")
+  .option("--dry-run", "Load and validate the workflow without running it")
+  .option("--json", "Output the full run result as JSON")
+  .action(async (ref: string, opts: WorkflowRunOptions) => {
+    await run(() => workflowRunCmd(ref, opts));
+  });
+
+workflow
+  .command("list")
+  .description("List available workflows in .claude/workflows/")
+  .action(async () => {
+    await run(() => workflowListCmd());
+  });
+
+function collect(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}
 
 async function run(fn: () => Promise<void> | void) {
   try {
