@@ -20,7 +20,8 @@ jobs:
     uses: ./.github/workflows/_build-and-test.yml
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     needs: [build-and-test]
     steps:
       - uses: actions/checkout@v4
