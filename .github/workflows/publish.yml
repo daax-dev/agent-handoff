@@ -20,7 +20,7 @@ jobs:
     uses: ./.github/workflows/_build-and-test.yml
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build-and-test]
     steps:
       - uses: actions/checkout@v4
